@@ -1,0 +1,84 @@
+import time
+try:
+    from smbus2 import SMBus
+except ImportError:
+    # Fallback for dev environment without I2C availability
+    print("Warning: smbus2 not found. Using MockSMBus.")
+    class SMBus:
+        def __init__(self, bus): pass
+        def write_i2c_block_data(self, addr, cmd, vals): pass
+        def read_byte(self, addr): return 0
+        def close(self): pass
+
+class RelayController:
+    """
+    Manages communication with 6 Arduino Mega slaves via I2C.
+    Enforces relay safety timings and maps logical LED indices to physical addresses.
+    """
+    
+    ADDRESSES = [0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D]
+    LEDS_PER_SLAVE = 96
+    BYTES_PER_SLAVE = 12
+    
+    def __init__(self, bus_id=1):
+        self.bus = SMBus(bus_id)
+        self.total_relays = len(self.ADDRESSES) * self.LEDS_PER_SLAVE
+        print(f"RelayController initialized. Managing {self.total_relays} relays across {len(self.ADDRESSES)} slaves.")
+
+    def scan_bus(self):
+        """Checks for presence of all expected slave addresses."""
+        print("Scanning I2C Bus for Slaves...")
+        found = []
+        for addr in self.ADDRESSES:
+            try:
+                # simple read to check presence
+                self.bus.read_byte(addr)
+                found.append(addr)
+                print(f"  [OK] Found Slave at 0x{addr:02X}")
+            except Exception:
+                print(f"  [FAIL] No response from 0x{addr:02X}")
+        return found
+
+    def dispatch_frame(self, frame_data):
+        """
+        Sends a full frame (up to 576 bits) to all slaves.
+        
+        Args:
+            frame_data (list/bytearray): 1D array of 1s and 0s, or packed bytes. 
+                                         Here assuming flat list of ints (0/1).
+        """
+        # Split flat bit array into chunks for each slave
+        # Frame size expected: 6 * 96 = 576 bits
+        
+        if len(frame_data) < self.total_relays:
+            # Pad with zeros if short
+            frame_data += [0] * (self.total_relays - len(frame_data))
+            
+        for i, addr in enumerate(self.ADDRESSES):
+            start_idx = i * self.LEDS_PER_SLAVE
+            end_idx = start_idx + self.LEDS_PER_SLAVE
+            slave_chunk = frame_data[start_idx:end_idx]
+            
+            # Pack bits into bytes
+            packed_bytes = self._pack_bits(slave_chunk)
+            
+            try:
+                # CMD byte 0x00 is arbitrary, just writing data block
+                self.bus.write_i2c_block_data(addr, 0x00, packed_bytes)
+            except OSError as e:
+                print(f"Error writing to 0x{addr:02X}: {e}")
+
+    def _pack_bits(self, bits):
+        """Converts a list of 96 bits (0/1) into 12 bytes."""
+        packed = []
+        for i in range(0, len(bits), 8):
+            byte_val = 0
+            for b in range(8):
+                if i + b < len(bits):
+                    if bits[i + b]:
+                        byte_val |= (1 << b)
+            packed.append(byte_val)
+        return packed
+
+    def close(self):
+        self.bus.close()

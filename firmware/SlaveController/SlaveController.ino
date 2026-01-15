@@ -1,104 +1,127 @@
 /**
- * LED Matrix Retrofit - Slave Firmware
+ * Relay-Aware LED Retrofit Firmware
  * Target: Arduino Mega 2560
- * 
+ * Role: I2C Slave
+ *
  * Logic:
- * - Configurable I2C Address (0x08 - 0x0D)
- * - Receives 12 bytes of data (96 bits) via I2C
- * - Maps bits to physical pins and updates them
- * 
- * Wiring:
- * - SDA: Pin 20
- * - SCL: Pin 21
- * - GND: Common Ground with Master
+ * - Receives 12 bytes (96 bits) from Master via I2C.
+ * - Comparing received state with current state.
+ * - Enforces minimum settling time for mechanical relays.
  */
 
 #include <Wire.h>
 
-// --- CONFIGURATION ---
-// CHANGE THIS ID FOR EACH BOARD: 0 to 5
-#define BOARD_ID 0
+// --- Configuration ---
+#define I2C_ADDRESS 0x08 // CHANGE THIS for each board (0x08 - 0x0D)
+#define NUM_LEDS 96
+#define BYTES_PER_FRAME 12
+#define MIN_TOGGLE_INTERVAL_MS 20
 
-// Base address is 0x08. Board 0->0x08, Board 1->0x09, etc.
-const int SLAVE_ADDRESS = 0x08 + BOARD_ID;
-const int NUM_LEDS = 96;
-const int BYTES_PER_FRAME = 12; // 96 bits / 8
+// --- Globals ---
+// Placeholder pin mapping. Real hardware needs specific pin assignments.
+// Using -1 for unassigned/overflow pins since Mega only has ~70 GPIOs.
+// We map the first ~70 bits to valid digital pins 2-69 for demonstration.
+int ledPins[NUM_LEDS];
 
-// --- PIN MAPPING ---
-// Map logical LED index (0-95) to physical Mega Pin
-// TODO: USER MUST FILL THIS WITH ACTUAL WIRING
-const int PROGMEM PIN_MAP[NUM_LEDS] = {
-  // Example placeholder mapping (Pins 2-53, then A0-A15 mixed)
-  // 0-9
-  2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
-  // 10-19
-  12, 13, 22, 23, 24, 25, 26, 27, 28, 29,
-  // 20-29
-  30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
-  // 30-39
-  40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
-  // 40-49
-  50, 51, 52, 53, A0, A1, A2, A3, A4, A5,
-  // 50-59 (Extended placeholders)
-  A6, A7, A8, A9, A10, A11, A12, A13, A14, A15,
-  // 60-95 (Fill with valid digital pins not used by I2C)
-  // Repeating for placeholder purposes - REPLACE THESE
-  2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 22, 23, 24, 25, 26, 27, 28, 29,
-  30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45
-};
+byte currentLedState[BYTES_PER_FRAME];  // Helper to track bitset state
+unsigned long lastToggleTime[NUM_LEDS]; // Timestamp for each relay
 
-// Buffer to store received data
-volatile uint8_t ledBuffer[BYTES_PER_FRAME];
+// Buffer for incoming I2C data
+volatile byte incomingData[BYTES_PER_FRAME];
 volatile bool newDataAvailable = false;
 
 void setup() {
-  // Initialize Pins
+  // Initialize Pin Mapping
+  // Simple map: bits 0-67 map to digital pins 2-69.
+  // Bits 68-95 are ignored (-1) due to hardware limits.
   for (int i = 0; i < NUM_LEDS; i++) {
-    int pin = pgm_read_word_near(PIN_MAP + i);
-    pinMode(pin, OUTPUT);
-    digitalWrite(pin, LOW); // Start OFF
+    if (i < 68) {
+      ledPins[i] = i + 2;
+    } else {
+      ledPins[i] = -1;
+    }
   }
 
+  // Set Pin Modes
+  for (int i = 0; i < NUM_LEDS; i++) {
+    if (ledPins[i] != -1) {
+      pinMode(ledPins[i], OUTPUT);
+      digitalWrite(ledPins[i], LOW); // Start OFF
+      lastToggleTime[i] = 0;
+    }
+  }
+
+  // Clear state buffers
+  memset(currentLedState, 0, BYTES_PER_FRAME);
+  memset((void *)incomingData, 0, BYTES_PER_FRAME);
+
   // Initialize I2C
-  Wire.begin(SLAVE_ADDRESS);
+  Wire.begin(I2C_ADDRESS);
   Wire.onReceive(receiveEvent);
 
-  // Debug Serial
   Serial.begin(115200);
-  Serial.print("Slave Initialized. Address: 0x");
-  Serial.println(SLAVE_ADDRESS, HEX);
+  Serial.print("Slave Initialized on 0x");
+  Serial.println(I2C_ADDRESS, HEX);
 }
 
 void loop() {
   if (newDataAvailable) {
-    updateLEDs();
-    newDataAvailable = false;
+    processLedState();
+    newDataAvailable = false; // Acknowledgement
   }
 }
 
-// Interrupt Handler for I2C Receive
+// I2C Interrupt Handler
+// Stores data into a buffer to keep ISR short.
 void receiveEvent(int howMany) {
-  if (howMany >= BYTES_PER_FRAME) {
+  if (howMany == BYTES_PER_FRAME) {
     for (int i = 0; i < BYTES_PER_FRAME; i++) {
-      ledBuffer[i] = Wire.read();
-    }
-    // Discard any extra bytes
-    while (Wire.available()) {
-      Wire.read();
+      incomingData[i] = Wire.read();
     }
     newDataAvailable = true;
+  } else {
+    // Flush invalid packet
+    while (Wire.available())
+      Wire.read();
   }
 }
 
-void updateLEDs() {
-  for (int i = 0; i < NUM_LEDS; i++) {
-    int byteIndex = i / 8;
-    int bitIndex = i % 8;
-    
-    // Check if bit is set
-    bool state = (ledBuffer[byteIndex] >> bitIndex) & 0x01;
-    
-    int pin = pgm_read_word_near(PIN_MAP + i);
-    digitalWrite(pin, state ? HIGH : LOW);
+// Main logic to update relays
+void processLedState() {
+  unsigned long now = millis();
+
+  for (int byteIdx = 0; byteIdx < BYTES_PER_FRAME; byteIdx++) {
+    byte incomingByte = incomingData[byteIdx];
+    // Check if this byte has any changes compared to current known state
+    // Optimization: if byte is same, skip bit checking
+    // NOTE: We do bit checking anyway to enforce per-pin timing
+
+    for (int bitIdx = 0; bitIdx < 8; bitIdx++) {
+      int globalLedIndex = (byteIdx * 8) + bitIdx;
+
+      // Safety check for array bounds
+      if (globalLedIndex >= NUM_LEDS)
+        continue;
+
+      int pin = ledPins[globalLedIndex];
+      if (pin == -1)
+        continue;
+
+      bool desiredState = (incomingByte >> bitIdx) & 0x01;
+      bool currentState = digitalRead(pin); // Read actual pin state
+
+      if (desiredState != currentState) {
+        // Change requested
+        if (now - lastToggleTime[globalLedIndex] >= MIN_TOGGLE_INTERVAL_MS) {
+          digitalWrite(pin, desiredState ? HIGH : LOW);
+          lastToggleTime[globalLedIndex] = now;
+        } else {
+          // Rate limited! We ignore this update to protect the relay.
+          // The next frame will catch it if it persists.
+        }
+      }
+    }
+    // Update our shadow copy of state (optional, mainly for debugging logic)
+    currentLedState[byteIdx] = incomingByte;
   }
 }
