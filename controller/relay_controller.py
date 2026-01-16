@@ -1,17 +1,27 @@
 import time
 import math
+import os
 from config_loader import Config
 
+# Mock SMBus for development/testing without hardware
+class MockSMBus:
+    def __init__(self, bus):
+        print(f"[MOCK MODE] Using MockSMBus for I2C bus {bus}")
+    def write_i2c_block_data(self, addr, cmd, vals):
+        pass  # Silently ignore writes in mock mode
+    def read_byte(self, addr):
+        return 0
+    def close(self):
+        pass
+
+# Try to import real SMBus
 try:
-    from smbus2 import SMBus
+    from smbus2 import SMBus as RealSMBus
+    SMBUS_AVAILABLE = True
 except ImportError:
-    # Fallback for dev environment without I2C availability
     print("Warning: smbus2 not found. Using MockSMBus.")
-    class SMBus:
-        def __init__(self, bus): pass
-        def write_i2c_block_data(self, addr, cmd, vals): pass
-        def read_byte(self, addr): return 0
-        def close(self): pass
+    SMBUS_AVAILABLE = False
+    RealSMBus = MockSMBus
 
 class RelayController:
     """
@@ -20,7 +30,7 @@ class RelayController:
     Enforces relay safety timings and maps logical LED indices to physical addresses.
     """
 
-    def __init__(self, config=None):
+    def __init__(self, config=None, mock_mode=None):
         # Load configuration
         self.config = config if config else Config()
 
@@ -29,11 +39,30 @@ class RelayController:
         self.LEDS_PER_SLAVE = self.config.leds_per_slave
         self.BYTES_PER_SLAVE = math.ceil(self.LEDS_PER_SLAVE / 8)
 
+        # Determine if we should use mock mode
+        if mock_mode is None:
+            # Auto-detect: use mock if I2C device doesn't exist or isn't accessible
+            i2c_device = f'/dev/i2c-{self.config.i2c_bus}'
+            mock_mode = not os.path.exists(i2c_device) or not os.access(i2c_device, os.R_OK | os.W_OK)
+
         # Initialize I2C bus
-        self.bus = SMBus(self.config.i2c_bus)
+        if mock_mode or not SMBUS_AVAILABLE:
+            self.bus = MockSMBus(self.config.i2c_bus)
+            self.mock_mode = True
+        else:
+            try:
+                self.bus = RealSMBus(self.config.i2c_bus)
+                self.mock_mode = False
+            except (PermissionError, FileNotFoundError) as e:
+                print(f"Warning: Cannot access I2C device: {e}")
+                print("Falling back to MockSMBus for testing.")
+                self.bus = MockSMBus(self.config.i2c_bus)
+                self.mock_mode = True
+
         self.total_relays = self.config.total_leds
 
-        print(f"RelayController initialized ({self.config.environment} mode)")
+        mode_str = "MOCK" if self.mock_mode else "HARDWARE"
+        print(f"RelayController initialized ({self.config.environment} mode, {mode_str})")
         print(f"Managing {self.total_relays} outputs across {len(self.ADDRESSES)} slave(s).")
 
     def scan_bus(self):
