@@ -74,11 +74,14 @@ Total: 3 LEDs for development and testing
 
 **Python Controller (Raspberry Pi)**:
 - `controller/main.py` - Entry point, animation loop orchestration
+- `controller/web_server.py` - Flask web interface with API endpoints
 - `controller/config_loader.py` - Environment configuration loader (reads config.yaml)
 - `controller/display_manager.py` - High-level display abstraction (buffer management)
 - `controller/relay_controller.py` - I2C communication layer, frame dispatch to slaves
 - `controller/animation.py` - Animation classes with relay-safe timing enforcement
 - `controller/simple_test.py` - Simple test patterns for 3-LED setup
+- `controller/templates/` - HTML templates for web interface
+- `controller/static/` - CSS and JavaScript for web interface
 
 **Arduino Firmware**:
 - `firmware/SlaveController/SlaveController.ino` - I2C slave for production (Arduino Mega)
@@ -116,6 +119,19 @@ python3 controller/main.py --env test
 Run simple test patterns (recommended for test environment):
 ```bash
 python3 controller/simple_test.py
+```
+
+Start web interface:
+```bash
+./start_web.sh
+
+# Or with environment override
+./start_web.sh --env test
+
+# Direct Python invocation
+python3 controller/web_server.py --host 0.0.0.0 --port 5000 --env test
+
+# Access at http://raspberry-pi-ip:5000
 ```
 
 Scan I2C bus to verify slaves are detected:

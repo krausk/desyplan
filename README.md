@@ -71,6 +71,28 @@ Then flash:
 3. Verify I2C: `i2cdetect -y 1` (should show 0x08-0x0D)
 
 #### 4. Run Controller
+
+**Option A: Web Interface (Recommended)**
+
+```bash
+# Start the web interface
+./start_web.sh
+
+# Or specify environment
+./start_web.sh --env test
+./start_web.sh --env production
+
+# Access at http://raspberry-pi-ip:5000
+```
+
+The web interface provides:
+- Individual LED on/off controls
+- Animation selection dropdown
+- Real-time status updates
+- Simple, responsive UI
+
+**Option B: Command Line**
+
 ```bash
 # Run main animation loop
 python3 controller/main.py
@@ -84,9 +106,65 @@ python3 controller/main.py --scan
 
 ## Documentation
 
+- **[WEB_INTERFACE.md](WEB_INTERFACE.md)** - Complete web interface documentation and API reference
 - **[TEST_SETUP.md](TEST_SETUP.md)** - Complete guide for 3-LED test setup
 - **[CLAUDE.md](CLAUDE.md)** - Developer reference and architecture details
 - **docs/hardware_logic.md** - Hardware wiring and specifications
+
+## Web Interface
+
+The web interface provides an easy-to-use control panel accessible from any device on your network.
+
+### Features
+- **Manual Control**: Toggle individual LEDs/relays on and off
+- **Animation Control**: Select and start animations from a dropdown menu
+- **Real-time Updates**: Live status display and LED state visualization
+- **Responsive Design**: Works on desktop, tablet, and mobile
+- **Environment Aware**: Automatically adapts to test or production configuration
+
+### Starting the Web Interface
+
+**Method 1: Simple Startup Script**
+```bash
+./start_web.sh
+# Access at http://raspberry-pi-ip:5000
+```
+
+**Method 2: Direct Python**
+```bash
+python3 controller/web_server.py --host 0.0.0.0 --port 5000
+```
+
+**Method 3: Run as System Service (Auto-start on boot)**
+
+1. Edit the service file to match your setup:
+   ```bash
+   nano relay-controller-web.service
+   # Update User= and paths if needed
+   ```
+
+2. Install the service:
+   ```bash
+   sudo cp relay-controller-web.service /etc/systemd/system/
+   sudo systemctl daemon-reload
+   sudo systemctl enable relay-controller-web
+   sudo systemctl start relay-controller-web
+   ```
+
+3. Check status:
+   ```bash
+   sudo systemctl status relay-controller-web
+   ```
+
+### API Endpoints
+
+The web server also provides a REST API:
+- `GET /api/status` - Get current system status
+- `POST /api/led/<index>` - Toggle specific LED
+- `POST /api/all_leds` - Set all LEDs to same state
+- `GET /api/animations` - List available animations
+- `POST /api/animation/start` - Start an animation
+- `POST /api/animation/stop` - Stop current animation
 
 ## Configuration
 

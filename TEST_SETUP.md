@@ -140,6 +140,22 @@ Expected output:
 
 ### Step 3: Test the Python Controller
 
+**Option A: Web Interface (Recommended)**
+
+```bash
+# Start the web interface
+./start_web.sh --env test
+
+# Open in browser: http://raspberry-pi-ip:5000
+```
+
+The web interface lets you:
+- Click individual LEDs to turn them on/off
+- Select animations from the dropdown
+- See real-time status updates
+
+**Option B: Command Line**
+
 ```bash
 cd controller
 

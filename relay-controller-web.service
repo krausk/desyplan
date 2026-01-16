@@ -1,0 +1,16 @@
+[Unit]
+Description=Relay/LED Controller Web Interface
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/tino/Code/desyplan/controller
+ExecStart=/usr/bin/python3 /home/tino/Code/desyplan/controller/web_server.py
+Restart=on-failure
+RestartSec=5s
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

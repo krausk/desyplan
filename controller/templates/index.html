@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Relay/LED Controller</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Relay/LED Controller</h1>
+            <div id="status-bar">
+                <span id="environment-badge" class="badge">Loading...</span>
+                <span id="mode-badge" class="badge">Manual Mode</span>
+            </div>
+        </header>
+
+        <main>
+            <!-- Animation Controls -->
+            <section class="control-panel">
+                <h2>Animation Control</h2>
+                <div class="animation-controls">
+                    <select id="animation-select" class="form-control">
+                        <option value="">Select an animation...</option>
+                    </select>
+                    <button id="start-animation-btn" class="btn btn-primary">Start Animation</button>
+                    <button id="stop-animation-btn" class="btn btn-danger">Stop Animation</button>
+                </div>
+                <div id="animation-info" class="info-box"></div>
+            </section>
+
+            <!-- Manual LED Controls -->
+            <section class="control-panel">
+                <h2>Manual Control</h2>
+                <div class="manual-controls">
+                    <button id="all-on-btn" class="btn btn-success">All On</button>
+                    <button id="all-off-btn" class="btn btn-secondary">All Off</button>
+                </div>
+
+                <div id="led-grid" class="led-grid">
+                    <!-- LED buttons will be generated here by JavaScript -->
+                </div>
+            </section>
+
+            <!-- Status Display -->
+            <section class="control-panel">
+                <h2>System Status</h2>
+                <div class="status-info">
+                    <p><strong>Environment:</strong> <span id="env-name">-</span></p>
+                    <p><strong>Description:</strong> <span id="env-description">-</span></p>
+                    <p><strong>Total Outputs:</strong> <span id="total-leds">-</span></p>
+                    <p><strong>Mode:</strong> <span id="current-mode">Manual</span></p>
+                    <p><strong>Animation:</strong> <span id="current-animation">None</span></p>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <p>Relay Controller Web Interface | <a href="https://github.com/anthropics/claude-code" target="_blank">Built with Claude Code</a></p>
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
