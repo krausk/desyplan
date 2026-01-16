@@ -11,9 +11,41 @@ This is a retrofit project replacing the original controller of a fire alarm pan
 - **Contact bounce and arcing**: Rapid toggling destroys relays
 - **Minimum safe interval**: 20ms-50ms between state changes
 
+## Configuration System
+
+The project supports multiple environments through `config.yaml`:
+
+- **Production**: Full system with 6 Arduino Mega 2560s and 576 relays
+- **Test**: Simplified setup with 1 Arduino UNO and 3 LEDs
+
+Change the active environment by editing `active_environment` in `config.yaml` or using the `--env` flag:
+
+```bash
+# Use test environment
+python3 controller/main.py --env test
+
+# Use production environment
+python3 controller/main.py --env production
+```
+
+The configuration system controls:
+- Number of slaves and I2C addresses
+- Total number of outputs (LEDs/relays)
+- Timing parameters (delays for relay safety or LED visibility)
+- Firmware source files and Arduino board types
+
+**Key files**:
+- `config.yaml` - Environment configuration
+- `controller/config_loader.py` - Configuration parser
+- `build.sh` or `deploy_firmware.py` - Automated firmware deployment
+
+See `TEST_SETUP.md` for detailed instructions on the 3-LED test environment.
+
 ## Architecture
 
 ### Hardware Topology
+
+**Production Environment**:
 ```
 Raspberry Pi (Master, Python)
     ↓ I2C (3.3V ↔ 5V via level shifter)
@@ -28,16 +60,33 @@ Raspberry Pi (Master, Python)
 
 Total: 576 independently controllable relays (treated as "LEDs" in code comments)
 
+**Test Environment**:
+```
+Raspberry Pi (Master, Python)
+    ↓ I2C (3.3V ↔ 5V via level shifter)
+    ↓
+└─ Arduino UNO (0x08) ─→ 3 LEDs (pins 13, 12, 8)
+```
+
+Total: 3 LEDs for development and testing
+
 ### Software Architecture
 
 **Python Controller (Raspberry Pi)**:
 - `controller/main.py` - Entry point, animation loop orchestration
+- `controller/config_loader.py` - Environment configuration loader (reads config.yaml)
 - `controller/display_manager.py` - High-level display abstraction (buffer management)
 - `controller/relay_controller.py` - I2C communication layer, frame dispatch to slaves
 - `controller/animation.py` - Animation classes with relay-safe timing enforcement
+- `controller/simple_test.py` - Simple test patterns for 3-LED setup
 
 **Arduino Firmware**:
-- `firmware/SlaveController/SlaveController.ino` - I2C slave receiver with rate limiting
+- `firmware/SlaveController/SlaveController.ino` - I2C slave for production (Arduino Mega)
+- `firmware/TestController/TestController.ino` - I2C slave for test (Arduino UNO, 3 LEDs)
+
+**Build Tools**:
+- `build.sh` - Shell wrapper for firmware deployment
+- `deploy_firmware.py` - Python script to compile and upload firmware based on config
 
 **Data Flow**:
 1. Animation generates frame (576-bit array)
@@ -58,14 +107,25 @@ pip3 install -r requirements.txt
 Run the main animation loop:
 ```bash
 python3 controller/main.py
+
+# Or specify environment
+python3 controller/main.py --env production
+python3 controller/main.py --env test
 ```
 
-Scan I2C bus to verify all 6 slaves are detected:
+Run simple test patterns (recommended for test environment):
+```bash
+python3 controller/simple_test.py
+```
+
+Scan I2C bus to verify slaves are detected:
 ```bash
 python3 controller/main.py --scan
+# Production: Should show 0x08 through 0x0D
+# Test: Should show 0x08 only
 ```
 
-Run diagnostic relay test pattern:
+Run diagnostic test pattern:
 ```bash
 python3 controller/main.py --test
 ```
@@ -73,41 +133,64 @@ python3 controller/main.py --test
 Verify I2C devices on the Pi hardware:
 ```bash
 i2cdetect -y 1
-# Should show devices at 0x08 through 0x0D
+# Production: Should show devices at 0x08 through 0x0D
+# Test: Should show device at 0x08
 ```
 
-### Arduino Firmware (Development Machine)
+### Firmware Deployment (Development Machine → Arduino)
 
-Firmware location: `firmware/SlaveController/SlaveController.ino`
+**Using the build script (recommended)**:
 
-**CRITICAL**: Before flashing each Arduino, update the I2C address in the firmware:
-```cpp
-#define I2C_ADDRESS 0x08  // Change to 0x08, 0x09, 0x0A, 0x0B, 0x0C, or 0x0D
-```
-
-Flash using Arduino IDE or `arduino-cli`:
 ```bash
-# Compile and upload (adjust port and FQBN as needed)
+# Compile only (verify it works)
+./build.sh --compile-only
+
+# Compile and upload (reads config.yaml for active environment)
+./build.sh --port /dev/ttyUSB0
+
+# Override environment
+./build.sh --port /dev/ttyUSB0 --env test
+./build.sh --port /dev/ttyUSB0 --env production
+```
+
+**Manual deployment**:
+
+For production (Arduino Mega 2560):
+```bash
+# Update I2C address in firmware first!
+# Edit firmware/SlaveController/SlaveController.ino
+# #define I2C_ADDRESS 0x08  // Change to 0x08-0x0D for each board
+
 arduino-cli compile --fqbn arduino:avr:mega firmware/SlaveController
 arduino-cli upload -p /dev/ttyUSB0 --fqbn arduino:avr:mega firmware/SlaveController
+```
+
+For test (Arduino UNO):
+```bash
+arduino-cli compile --fqbn arduino:avr:uno firmware/TestController
+arduino-cli upload -p /dev/ttyUSB0 --fqbn arduino:avr:uno firmware/TestController
 ```
 
 ## Critical Implementation Details
 
 ### Relay Safety Timing
 
-**Firmware-level protection** (`SlaveController.ino:18`):
-- `MIN_TOGGLE_INTERVAL_MS = 20` - Hard limit enforced per GPIO pin
-- If a state change is requested before 20ms has elapsed since the last toggle, it is silently ignored
+**Firmware-level protection**:
+- Production (`SlaveController.ino`): `MIN_TOGGLE_INTERVAL_MS = 20`
+- Test (`TestController.ino`): `MIN_TOGGLE_INTERVAL_MS = 10` (LEDs can switch faster)
+- Hard limit enforced per GPIO pin
+- If a state change is requested before this interval has elapsed since the last toggle, it is silently ignored
 
-**Software-level protection** (`animation.py:6`):
-- `MIN_RELAY_DELAY = 0.05` (50ms) - Soft limit for aesthetics and additional safety margin
+**Software-level protection** (configured in `config.yaml`):
+- Production: `min_relay_delay: 0.05` (50ms) - Soft limit for relay safety and aesthetics
+- Test: `min_relay_delay: 0.1` (100ms) - Longer for visibility of LED changes during testing
 - All `Animation` subclasses use `safe_wait()` to enforce this delay
 
 **When modifying animations**:
-- Never reduce delays below 50ms without testing on actual hardware
+- For production: Never reduce delays below 50ms without testing on actual relay hardware
 - Limit the number of simultaneous relay changes per frame (mechanical stress)
 - RandomTwinkle uses low `density` parameter for this reason
+- Test environment has more relaxed timing since LEDs don't have mechanical constraints
 
 ### Pin Mapping
 

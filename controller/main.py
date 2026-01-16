@@ -3,6 +3,7 @@ import time
 import signal
 import argparse
 from display_manager import DisplayManager
+from config_loader import Config
 from animation import RandomTwinkle, ScanningChase, LarsonScanner, RelayTest
 
 def signal_handler(sig, frame):
@@ -13,13 +14,30 @@ def main():
     parser = argparse.ArgumentParser(description="Relay Controller Master")
     parser.add_argument('--scan', action='store_true', help='Scan I2C bus for slaves')
     parser.add_argument('--test', action='store_true', help='Run diagnostic relay test')
+    parser.add_argument('--env', type=str, help='Override environment from config.yaml')
     args = parser.parse_args()
 
     signal.signal(signal.SIGINT, signal_handler)
-    
-    print("Initializing LED Matrix Controller (Relay Mode)...")
+
+    # Load configuration
+    config = Config()
+
+    # Override environment if specified
+    if args.env:
+        if args.env in config.config['environments']:
+            config.environment = args.env
+            config.env_config = config.config['environments'][args.env]
+            print(f"Environment overridden to: {args.env}")
+        else:
+            print(f"Error: Environment '{args.env}' not found in config.yaml")
+            return
+
+    # Print configuration
+    config.print_config()
+
+    print("Initializing LED Matrix Controller...")
     try:
-        dm = DisplayManager()
+        dm = DisplayManager(config)
     except Exception as e:
         print(f"Failed to init DisplayManager: {e}")
         return

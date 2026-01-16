@@ -1,8 +1,10 @@
 from relay_controller import RelayController
+from config_loader import Config
 
 class DisplayManager:
-    def __init__(self):
-        self.controller = RelayController()
+    def __init__(self, config=None):
+        self.config = config if config else Config()
+        self.controller = RelayController(self.config)
         self.total_leds = self.controller.total_relays
         self.buffer = [0] * self.total_leds
 

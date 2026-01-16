@@ -1,0 +1,44 @@
+# Environment configuration for desyplan relay controller
+
+# Available environments: production, test
+active_environment: test
+
+environments:
+  production:
+    description: "Full system with 6 Arduino Mega 2560s controlling 576 relays"
+    hardware:
+      controller_type: "Arduino Mega 2560"
+      num_slaves: 6
+      leds_per_slave: 96
+      total_leds: 576
+      i2c_addresses: [0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D]
+      i2c_bus: 1
+    timing:
+      min_relay_delay: 0.05  # 50ms minimum delay between state changes (software)
+      min_toggle_interval_ms: 20  # 20ms minimum per relay (firmware)
+    firmware:
+      source: "firmware/SlaveController/SlaveController.ino"
+      board: "arduino:avr:mega"
+      pins: "auto"  # Uses firmware's default pin mapping
+
+  test:
+    description: "Test setup with 1 Arduino UNO controlling 3 LEDs"
+    hardware:
+      controller_type: "Arduino UNO"
+      num_slaves: 1
+      leds_per_slave: 3
+      total_leds: 3
+      i2c_addresses: [0x08]
+      i2c_bus: 1
+      # Explicit pin mapping for test LEDs
+      pin_mapping:
+        0: 13  # Built-in LED
+        1: 12
+        2: 8
+    timing:
+      min_relay_delay: 0.1  # 100ms for visible LED changes
+      min_toggle_interval_ms: 10  # LEDs can switch faster than relays
+    firmware:
+      source: "firmware/TestController/TestController.ino"
+      board: "arduino:avr:uno"
+      pins: [13, 12, 8]

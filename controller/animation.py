@@ -2,37 +2,36 @@ import time
 import random
 import abc
 
-# SAFETY CONSTANT
-MIN_RELAY_DELAY = 0.05  # 50ms absolute minimum between updates
-
 class Animation(abc.ABC):
     def __init__(self, display_manager):
         self.dm = display_manager
         self.last_update_time = 0
+        # Get minimum delay from config
+        self.min_relay_delay = display_manager.config.min_relay_delay
 
     @abc.abstractmethod
     def step(self):
         """Perform one step of the animation."""
         pass
-        
+
     def safe_wait(self, duration):
         """
         Waits for the specified duration OR the safe limit, whichever is longer.
         Also accounts for processing time since last update.
         """
         now = time.time()
-        # Ensure we don't switch faster than MIN_RELAY_DELAY
+        # Ensure we don't switch faster than configured minimum delay
         # If the requested duration is shorter than safety limit, extend it.
-        
-        target_delay = max(duration, MIN_RELAY_DELAY)
-        
+
+        target_delay = max(duration, self.min_relay_delay)
+
         # Calculate how much we really need to sleep
         time_since_last = now - self.last_update_time
         remaining = target_delay - time_since_last
-        
+
         if remaining > 0:
             time.sleep(remaining)
-            
+
         self.last_update_time = time.time()
 
 class RandomTwinkle(Animation):

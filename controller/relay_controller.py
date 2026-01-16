@@ -1,4 +1,7 @@
 import time
+import math
+from config_loader import Config
+
 try:
     from smbus2 import SMBus
 except ImportError:
@@ -12,18 +15,26 @@ except ImportError:
 
 class RelayController:
     """
-    Manages communication with 6 Arduino Mega slaves via I2C.
+    Manages communication with Arduino slaves via I2C.
+    Supports multiple environments via config.yaml.
     Enforces relay safety timings and maps logical LED indices to physical addresses.
     """
-    
-    ADDRESSES = [0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D]
-    LEDS_PER_SLAVE = 96
-    BYTES_PER_SLAVE = 12
-    
-    def __init__(self, bus_id=1):
-        self.bus = SMBus(bus_id)
-        self.total_relays = len(self.ADDRESSES) * self.LEDS_PER_SLAVE
-        print(f"RelayController initialized. Managing {self.total_relays} relays across {len(self.ADDRESSES)} slaves.")
+
+    def __init__(self, config=None):
+        # Load configuration
+        self.config = config if config else Config()
+
+        # Set hardware parameters from config
+        self.ADDRESSES = self.config.i2c_addresses
+        self.LEDS_PER_SLAVE = self.config.leds_per_slave
+        self.BYTES_PER_SLAVE = math.ceil(self.LEDS_PER_SLAVE / 8)
+
+        # Initialize I2C bus
+        self.bus = SMBus(self.config.i2c_bus)
+        self.total_relays = self.config.total_leds
+
+        print(f"RelayController initialized ({self.config.environment} mode)")
+        print(f"Managing {self.total_relays} outputs across {len(self.ADDRESSES)} slave(s).")
 
     def scan_bus(self):
         """Checks for presence of all expected slave addresses."""
