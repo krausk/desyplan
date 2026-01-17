@@ -28,7 +28,7 @@ environments:
       num_slaves: 1
       leds_per_slave: 3
       total_leds: 3
-      serial_ports: ["/dev/ttyUSB0"]
+      serial_ports: ["/dev/ttyACM0"]
       serial_baudrate: 115200
       # Explicit pin mapping for test LEDs
       pin_mapping:
