@@ -1,7 +1,11 @@
 import time
 import math
 import os
+import threading
+import logging
 from config_loader import Config
+
+logger = logging.getLogger(__name__)
 
 # Mock Serial for development/testing without hardware
 class MockSerial:
@@ -24,6 +28,7 @@ class MockSerial:
     def in_waiting(self):
         return 0
 
+    @property
     def is_open(self):
         return True
 
@@ -65,14 +70,16 @@ class RelayController:
 
         # Initialize serial connections
         self.serial_connections = []
+        self.slave_online = []
         self.mock_mode = mock_mode
+        self._lock = threading.Lock()
 
         for port in self.SERIAL_PORTS:
             try:
                 if mock_mode or not SERIAL_AVAILABLE:
                     conn = MockSerial(port, self.BAUDRATE, timeout=1)
                 else:
-                    conn = serial.Serial(port, self.BAUDRATE, timeout=1)
+                    conn = serial.Serial(port, self.BAUDRATE, timeout=1, write_timeout=0.05)
                     # Wait for Arduino to reset after serial connection
                     time.sleep(2)
                     # Flush any startup messages
@@ -80,16 +87,19 @@ class RelayController:
                     conn.reset_output_buffer()
 
                 self.serial_connections.append(conn)
+                self.slave_online.append(True)
                 print(f"Connected to {port} at {self.BAUDRATE} baud")
             except Exception as e:
                 print(f"Warning: Cannot connect to {port}: {e}")
                 if mock_mode:
                     conn = MockSerial(port, self.BAUDRATE, timeout=1)
                     self.serial_connections.append(conn)
+                    self.slave_online.append(True)
                 else:
                     print(f"Falling back to MockSerial for {port}")
                     conn = MockSerial(port, self.BAUDRATE, timeout=1)
                     self.serial_connections.append(conn)
+                    self.slave_online.append(False) # Mark as offline if failed to open real serial
                     self.mock_mode = True
 
         self.total_relays = self.config.total_leds
@@ -99,24 +109,46 @@ class RelayController:
         print(f"Managing {self.total_relays} outputs across {len(self.SERIAL_PORTS)} slave(s).")
 
     def scan_bus(self):
-        """Checks for presence of all expected serial connections."""
-        print("Scanning Serial Ports for Slaves...")
+        """Checks for presence of all expected serial connections. Attempts reconnection for offline slaves."""
+        logger.info("Scanning Serial Ports for Slaves...")
         found = []
-        for i, conn in enumerate(self.serial_connections):
-            port = self.SERIAL_PORTS[i]
+        for i, port in enumerate(self.SERIAL_PORTS):
             try:
-                if hasattr(conn, 'is_open') and callable(conn.is_open):
-                    if conn.is_open():
-                        found.append(port)
-                        print(f"  [OK] Found Slave at {port}")
-                    else:
-                        print(f"  [FAIL] Port {port} is not open")
-                else:
-                    # MockSerial
+                # Try to re-open if marked offline or connection is lost
+                if not self.slave_online[i]:
+                    logger.info(f"  Attempting to reconnect to {port}...")
+                    try:
+                        # Close old handle if it exists
+                        if i < len(self.serial_connections) and self.serial_connections[i]:
+                            try:
+                                self.serial_connections[i].close()
+                            except:
+                                pass
+                                
+                        if self.mock_mode or not SERIAL_AVAILABLE:
+                            self.serial_connections[i] = MockSerial(port, self.BAUDRATE, timeout=1)
+                            self.slave_online[i] = True
+                        else:
+                            conn = serial.Serial(port, self.BAUDRATE, timeout=1, write_timeout=0.05)
+                            time.sleep(2)
+                            conn.reset_input_buffer()
+                            conn.reset_output_buffer()
+                            self.serial_connections[i] = conn
+                            self.slave_online[i] = True
+                    except Exception as e:
+                        logger.error(f"  Reconnection failed for {port}: {e}")
+                
+                conn = self.serial_connections[i]
+                # Check is_open (pyserial property)
+                if self.mock_mode or (hasattr(conn, 'is_open') and conn.is_open):
                     found.append(port)
-                    print(f"  [OK] Found Slave at {port} (MOCK)")
+                    logger.info(f"  [OK] Slave at {port} is ONLINE")
+                else:
+                    self.slave_online[i] = False
+                    logger.warning(f"  [FAIL] Port {port} is closed")
             except Exception as e:
-                print(f"  [FAIL] Error checking {port}: {e}")
+                self.slave_online[i] = False
+                logger.error(f"  [FAIL] Error checking/reconnecting {port}: {e}")
         return found
 
     def dispatch_frame(self, frame_data):
@@ -127,40 +159,64 @@ class RelayController:
             frame_data (list/bytearray): 1D array of 1s and 0s, or packed bytes.
                                          Here assuming flat list of ints (0/1).
         """
-        # Split flat bit array into chunks for each slave
+        with self._lock:
+            # Split flat bit array into chunks for each slave
 
-        if len(frame_data) < self.total_relays:
-            # Pad with zeros if short
-            frame_data += [0] * (self.total_relays - len(frame_data))
+            if len(frame_data) < self.total_relays:
+                # Pad with zeros if short
+                frame_data += [0] * (self.total_relays - len(frame_data))
 
-        for i, conn in enumerate(self.serial_connections):
-            start_idx = i * self.LEDS_PER_SLAVE
-            end_idx = start_idx + self.LEDS_PER_SLAVE
-            slave_chunk = frame_data[start_idx:end_idx]
+            for i, conn in enumerate(self.serial_connections):
+                if not self.slave_online[i]:
+                    continue
 
-            # Pack bits into bytes
-            packed_bytes = self._pack_bits(slave_chunk)
+                start_idx = i * self.LEDS_PER_SLAVE
+                end_idx = start_idx + self.LEDS_PER_SLAVE
+                slave_chunk = frame_data[start_idx:end_idx]
 
-            try:
-                # Serial protocol: Send start marker, length, data, end marker
-                # Start marker: 0xFF 0xAA
-                # Length: 1 byte (number of data bytes)
-                # Data: packed_bytes
-                # End marker: 0x55 0xFF
+                # Pack bits into bytes
+                packed_bytes = self._pack_bits(slave_chunk)
 
-                packet = bytearray()
-                packet.append(0xFF)  # Start marker byte 1
-                packet.append(0xAA)  # Start marker byte 2
-                packet.append(len(packed_bytes))  # Data length
-                packet.extend(packed_bytes)  # Data payload
-                packet.append(0x55)  # End marker byte 1
-                packet.append(0xFF)  # End marker byte 2
+                try:
+                    # Clear any unread messages from Arduino to prevent buffer choking
+                    if not self.mock_mode:
+                        conn.reset_input_buffer()
 
-                conn.write(packet)
+                    # Serial protocol: Send start marker, length, data, end marker
+                    packet = bytearray([0xFF, 0xAA, len(packed_bytes)])
+                    packet.extend(packed_bytes)
+                    packet.extend([0x55, 0xFF])
 
-            except Exception as e:
-                port = self.SERIAL_PORTS[i]
-                print(f"Error writing to {port}: {e}")
+                    start_write = time.time()
+                    conn.write(packet)
+                    # Ensure data is transmitted
+                    if not self.mock_mode:
+                        conn.flush()
+                    
+                    elapsed = time.time() - start_write
+                    if elapsed > 0.05: # Log slow writes (>50ms)
+                        logger.warning(f"Slow serial write to {self.SERIAL_PORTS[i]}: {elapsed*1000:.1f}ms")
+
+                except Exception as e:
+                    port = self.SERIAL_PORTS[i]
+                    logger.error(f"Error writing to {port}: {e}. Marking slave as OFFLINE.")
+                    self.slave_online[i] = False
+
+    def reset_buffers(self):
+        """Clears serial input/output buffers for all slaves."""
+        if self.mock_mode:
+            return
+            
+        with self._lock:
+            for i, conn in enumerate(self.serial_connections):
+                if not self.slave_online[i]:
+                    continue
+                try:
+                    conn.reset_input_buffer()
+                    conn.reset_output_buffer()
+                except Exception as e:
+                    print(f"Error resetting serial buffers for {self.SERIAL_PORTS[i]}: {e}")
+                    self.slave_online[i] = False
 
     def _pack_bits(self, bits):
         """Converts a list of bits (0/1) into bytes."""

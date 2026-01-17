@@ -32,6 +32,7 @@ function setupEventListeners() {
     // Manual controls
     document.getElementById('all-on-btn').addEventListener('click', () => setAllLEDs(true));
     document.getElementById('all-off-btn').addEventListener('click', () => setAllLEDs(false));
+    document.getElementById('scan-slaves-btn').addEventListener('click', scanSlaves);
 }
 
 // API Communication
@@ -96,7 +97,7 @@ function updateUI(status) {
     }
 
     // Update LED states
-    updateLEDStates(status.led_states);
+    updateLEDStates(status.led_states, status.slave_online, status.leds_per_slave);
 
     // Update button states
     updateButtonStates(status);
@@ -119,16 +120,28 @@ function createLEDGrid(totalLEDs) {
     }
 }
 
-function updateLEDStates(states) {
+function updateLEDStates(states, slaveOnline, ledsPerSlave) {
     states.forEach((state, index) => {
         const button = document.querySelector(`.led-button[data-index="${index}"]`);
         if (button) {
-            if (state) {
-                button.classList.add('active');
-                button.querySelector('.led-status').textContent = 'ON';
+            // Check if corresponding slave is online
+            const slaveIndex = Math.floor(index / ledsPerSlave);
+            const isOnline = slaveOnline[slaveIndex];
+
+            if (!isOnline) {
+                button.classList.add('disconnected');
+                button.disabled = true;
+                button.querySelector('.led-status').textContent = 'OFFLINE';
             } else {
-                button.classList.remove('active');
-                button.querySelector('.led-status').textContent = 'OFF';
+                button.classList.remove('disconnected');
+                button.disabled = false;
+                if (state) {
+                    button.classList.add('active');
+                    button.querySelector('.led-status').textContent = 'ON';
+                } else {
+                    button.classList.remove('active');
+                    button.querySelector('.led-status').textContent = 'OFF';
+                }
             }
         }
     });
@@ -238,6 +251,25 @@ async function setAllLEDs(state) {
         await updateStatus();
     } catch (error) {
         console.error('Failed to set all LEDs:', error);
+    }
+}
+
+async function scanSlaves() {
+    try {
+        const btn = document.getElementById('scan-slaves-btn');
+        btn.disabled = true;
+        btn.textContent = 'Scanning...';
+
+        const result = await apiRequest('scan', 'POST');
+        showToast(`Scan complete. Found ${result.found_count} online slaves.`, 'success');
+
+        btn.textContent = 'Re-scan Slaves';
+        btn.disabled = false;
+        await updateStatus();
+    } catch (error) {
+        console.error('Failed to scan slaves:', error);
+        document.getElementById('scan-slaves-btn').textContent = 'Re-scan Slaves';
+        document.getElementById('scan-slaves-btn').disabled = false;
     }
 }
 

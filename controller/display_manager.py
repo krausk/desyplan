@@ -19,5 +19,15 @@ class DisplayManager:
         """Push buffer to physical relays"""
         self.controller.dispatch_frame(self.buffer)
 
+    def reset_hardware(self):
+        """Reset hardware state and clear buffers"""
+        self.clear()
+        self.show()
+        self.controller.reset_buffers()
+
+    def get_slave_status(self):
+        """Returns list of online status for each slave"""
+        return self.controller.slave_online
+
     def close(self):
         self.controller.close()

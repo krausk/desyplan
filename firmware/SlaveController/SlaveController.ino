@@ -26,12 +26,12 @@ unsigned long lastToggleTime[NUM_LEDS]; // Timestamp for each relay
 
 // Serial communication state machine
 enum SerialState {
-  WAITING_START1,    // Waiting for 0xFF
-  WAITING_START2,    // Waiting for 0xAA
-  WAITING_LENGTH,    // Waiting for length byte
-  READING_DATA,      // Reading data bytes
-  WAITING_END1,      // Waiting for 0x55
-  WAITING_END2       // Waiting for 0xFF
+  WAITING_START1, // Waiting for 0xFF
+  WAITING_START2, // Waiting for 0xAA
+  WAITING_LENGTH, // Waiting for length byte
+  READING_DATA,   // Reading data bytes
+  WAITING_END1,   // Waiting for 0x55
+  WAITING_END2    // Waiting for 0xFF
 };
 
 SerialState serialState = WAITING_START1;
@@ -76,8 +76,8 @@ void setup() {
 }
 
 void loop() {
-  // Process incoming serial data
-  if (Serial.available() > 0) {
+  // Process ALL available incoming serial data
+  while (Serial.available() > 0) {
     byte incomingByte = Serial.read();
     processSerialByte(incomingByte);
   }
@@ -85,52 +85,52 @@ void loop() {
 
 void processSerialByte(byte b) {
   switch (serialState) {
-    case WAITING_START1:
-      if (b == 0xFF) {
-        serialState = WAITING_START2;
-      }
-      break;
+  case WAITING_START1:
+    if (b == 0xFF) {
+      serialState = WAITING_START2;
+    }
+    break;
 
-    case WAITING_START2:
-      if (b == 0xAA) {
-        serialState = WAITING_LENGTH;
-      } else {
-        serialState = WAITING_START1;  // Reset on error
-      }
-      break;
+  case WAITING_START2:
+    if (b == 0xAA) {
+      serialState = WAITING_LENGTH;
+    } else {
+      serialState = WAITING_START1; // Reset on error
+    }
+    break;
 
-    case WAITING_LENGTH:
-      dataLength = b;
-      dataIndex = 0;
-      if (dataLength > 0 && dataLength <= BYTES_PER_FRAME) {
-        serialState = READING_DATA;
-      } else {
-        serialState = WAITING_START1;  // Invalid length, reset
-      }
-      break;
+  case WAITING_LENGTH:
+    dataLength = b;
+    dataIndex = 0;
+    if (dataLength > 0 && dataLength <= BYTES_PER_FRAME) {
+      serialState = READING_DATA;
+    } else {
+      serialState = WAITING_START1; // Invalid length, reset
+    }
+    break;
 
-    case READING_DATA:
-      dataBuffer[dataIndex++] = b;
-      if (dataIndex >= dataLength) {
-        serialState = WAITING_END1;
-      }
-      break;
+  case READING_DATA:
+    dataBuffer[dataIndex++] = b;
+    if (dataIndex >= dataLength) {
+      serialState = WAITING_END1;
+    }
+    break;
 
-    case WAITING_END1:
-      if (b == 0x55) {
-        serialState = WAITING_END2;
-      } else {
-        serialState = WAITING_START1;  // Reset on error
-      }
-      break;
+  case WAITING_END1:
+    if (b == 0x55) {
+      serialState = WAITING_END2;
+    } else {
+      serialState = WAITING_START1; // Reset on error
+    }
+    break;
 
-    case WAITING_END2:
-      if (b == 0xFF) {
-        // Valid packet received! Process it.
-        processLedState();
-      }
-      serialState = WAITING_START1;  // Always reset state
-      break;
+  case WAITING_END2:
+    if (b == 0xFF) {
+      // Valid packet received! Process it.
+      processLedState();
+    }
+    serialState = WAITING_START1; // Always reset state
+    break;
   }
 }
 
@@ -138,7 +138,8 @@ void processSerialByte(byte b) {
 void processLedState() {
   unsigned long now = millis();
 
-  for (int byteIdx = 0; byteIdx < dataLength && byteIdx < BYTES_PER_FRAME; byteIdx++) {
+  for (int byteIdx = 0; byteIdx < dataLength && byteIdx < BYTES_PER_FRAME;
+       byteIdx++) {
     byte incomingByte = dataBuffer[byteIdx];
 
     for (int bitIdx = 0; bitIdx < 8; bitIdx++) {

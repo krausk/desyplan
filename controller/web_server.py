@@ -7,9 +7,18 @@ Provides a simple web UI to control individual outputs and select animations.
 from flask import Flask, render_template, jsonify, request
 import threading
 import time
+import logging
 from display_manager import DisplayManager
 from config_loader import Config
-from animation import RandomTwinkle, ScanningChase, LarsonScanner, RelayTest
+from animation import RandomTwinkle, ScanningChase, LarsonScanner, RelayTest, CircleAnimation
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
@@ -31,13 +40,14 @@ class AnimationThread(threading.Thread):
         self.running = True
 
     def run(self):
-        global animation_running
-        while self.running and animation_running:
+        print(f"Animation thread started for {self.animation.__class__.__name__}")
+        while self.running:
             try:
                 self.animation.step()
             except Exception as e:
                 print(f"Animation error: {e}")
                 break
+        print(f"Animation thread stopped for {self.animation.__class__.__name__}")
 
     def stop(self):
         self.running = False
@@ -71,11 +81,24 @@ def get_status():
     return jsonify({
         'environment': config.environment,
         'total_leds': display_manager.total_leds,
+        'leds_per_slave': display_manager.controller.LEDS_PER_SLAVE,
+        'slave_online': display_manager.get_slave_status(),
         'led_states': led_states,
         'manual_mode': manual_mode,
         'animation_running': animation_running,
         'current_animation': current_animation,
         'config_description': config.description
+    })
+
+
+@app.route('/api/scan', methods=['POST'])
+def scan_slaves():
+    """Manually trigger a re-scan of serial ports."""
+    found = display_manager.controller.scan_bus()
+    return jsonify({
+        'success': True,
+        'found_count': len(found),
+        'slave_online': display_manager.get_slave_status()
     })
 
 
@@ -161,10 +184,11 @@ def start_animation():
     if animation_running:
         stop_animation()
 
-    # Create animation instance
+    # Create animation instances on demand
     animations = {
         'random_twinkle': RandomTwinkle(display_manager, speed=0.1, density=0.05),
         'scanning_chase': ScanningChase(display_manager, speed=0.08, width=1),
+        'circle_animation': CircleAnimation(display_manager, speed=0.1),
         'larson_scanner': LarsonScanner(display_manager, speed=0.08, width=3),
         'relay_test': RelayTest(display_manager, speed=1.0)
     }
@@ -173,10 +197,10 @@ def start_animation():
         return jsonify({'error': 'Unknown animation'}), 400
 
     manual_mode = False
+    
+    # Start animation thread
     animation_running = True
     current_animation = animation_name
-
-    # Start animation thread
     animation_thread = AnimationThread(animations[animation_name])
     animation_thread.start()
 
@@ -192,18 +216,20 @@ def stop_animation():
     """Stop the current animation."""
     global animation_thread, animation_running, current_animation, manual_mode
 
-    if animation_running and animation_thread:
-        animation_running = False
+    if animation_thread:
         animation_thread.stop()
-        animation_thread.join(timeout=2.0)
+        animation_thread.join(timeout=3.0)
+        if animation_thread.is_alive():
+            print("Warning: Animation thread failed to stop gracefully")
         animation_thread = None
-        current_animation = None
+        
+    animation_running = False
+    current_animation = None
 
     manual_mode = True
 
-    # Clear all LEDs
-    display_manager.clear()
-    display_manager.show()
+    # Clear all LEDs and reset buffers
+    display_manager.reset_hardware()
 
     # Reset state
     global led_states
@@ -228,6 +254,11 @@ def get_animations():
             'id': 'scanning_chase',
             'name': 'Scanning Chase',
             'description': 'Single LED scanning across the display'
+        },
+        {
+            'id': 'circle_animation',
+            'name': 'Circle Animation',
+            'description': 'Sequence through all LEDs in a loop'
         },
         {
             'id': 'larson_scanner',

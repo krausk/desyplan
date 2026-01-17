@@ -14,7 +14,7 @@
 
 // --- Configuration ---
 #define NUM_LEDS 3
-#define MIN_TOGGLE_INTERVAL_MS 10  // Faster for LEDs vs mechanical relays
+#define MIN_TOGGLE_INTERVAL_MS 10 // Faster for LEDs vs mechanical relays
 
 // Pin mapping for the 3 LEDs
 const int ledPins[NUM_LEDS] = {13, 12, 8};
@@ -25,17 +25,17 @@ unsigned long lastToggleTime[NUM_LEDS];
 
 // Serial communication state machine
 enum SerialState {
-  WAITING_START1,    // Waiting for 0xFF
-  WAITING_START2,    // Waiting for 0xAA
-  WAITING_LENGTH,    // Waiting for length byte
-  READING_DATA,      // Reading data bytes
-  WAITING_END1,      // Waiting for 0x55
-  WAITING_END2       // Waiting for 0xFF
+  WAITING_START1, // Waiting for 0xFF
+  WAITING_START2, // Waiting for 0xAA
+  WAITING_LENGTH, // Waiting for length byte
+  READING_DATA,   // Reading data bytes
+  WAITING_END1,   // Waiting for 0x55
+  WAITING_END2    // Waiting for 0xFF
 };
 
 SerialState serialState = WAITING_START1;
 byte dataLength = 0;
-byte dataBuffer[16];  // Buffer for incoming data (max 16 bytes)
+byte dataBuffer[16]; // Buffer for incoming data (max 16 bytes)
 byte dataIndex = 0;
 
 void setup() {
@@ -59,8 +59,8 @@ void setup() {
 }
 
 void loop() {
-  // Process incoming serial data
-  if (Serial.available() > 0) {
+  // Process ALL available incoming serial data
+  while (Serial.available() > 0) {
     byte incomingByte = Serial.read();
     processSerialByte(incomingByte);
   }
@@ -68,52 +68,52 @@ void loop() {
 
 void processSerialByte(byte b) {
   switch (serialState) {
-    case WAITING_START1:
-      if (b == 0xFF) {
-        serialState = WAITING_START2;
-      }
-      break;
+  case WAITING_START1:
+    if (b == 0xFF) {
+      serialState = WAITING_START2;
+    }
+    break;
 
-    case WAITING_START2:
-      if (b == 0xAA) {
-        serialState = WAITING_LENGTH;
-      } else {
-        serialState = WAITING_START1;  // Reset on error
-      }
-      break;
+  case WAITING_START2:
+    if (b == 0xAA) {
+      serialState = WAITING_LENGTH;
+    } else {
+      serialState = WAITING_START1; // Reset on error
+    }
+    break;
 
-    case WAITING_LENGTH:
-      dataLength = b;
-      dataIndex = 0;
-      if (dataLength > 0 && dataLength <= 16) {
-        serialState = READING_DATA;
-      } else {
-        serialState = WAITING_START1;  // Invalid length, reset
-      }
-      break;
+  case WAITING_LENGTH:
+    dataLength = b;
+    dataIndex = 0;
+    if (dataLength > 0 && dataLength <= 16) {
+      serialState = READING_DATA;
+    } else {
+      serialState = WAITING_START1; // Invalid length, reset
+    }
+    break;
 
-    case READING_DATA:
-      dataBuffer[dataIndex++] = b;
-      if (dataIndex >= dataLength) {
-        serialState = WAITING_END1;
-      }
-      break;
+  case READING_DATA:
+    dataBuffer[dataIndex++] = b;
+    if (dataIndex >= dataLength) {
+      serialState = WAITING_END1;
+    }
+    break;
 
-    case WAITING_END1:
-      if (b == 0x55) {
-        serialState = WAITING_END2;
-      } else {
-        serialState = WAITING_START1;  // Reset on error
-      }
-      break;
+  case WAITING_END1:
+    if (b == 0x55) {
+      serialState = WAITING_END2;
+    } else {
+      serialState = WAITING_START1; // Reset on error
+    }
+    break;
 
-    case WAITING_END2:
-      if (b == 0xFF) {
-        // Valid packet received! Process it.
-        processLedData();
-      }
-      serialState = WAITING_START1;  // Always reset state
-      break;
+  case WAITING_END2:
+    if (b == 0xFF) {
+      // Valid packet received! Process it.
+      processLedData();
+    }
+    serialState = WAITING_START1; // Always reset state
+    break;
   }
 }
 
@@ -135,13 +135,7 @@ void processLedData() {
           currentLedState[i] = desiredState;
           lastToggleTime[i] = now;
 
-          // Debug output
-          Serial.print("LED ");
-          Serial.print(i);
-          Serial.print(" (Pin ");
-          Serial.print(ledPins[i]);
-          Serial.print("): ");
-          Serial.println(desiredState ? "ON" : "OFF");
+          // Debug output removed to prevent serial buffer choking
         }
       }
     }

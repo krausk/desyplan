@@ -2,9 +2,18 @@ import sys
 import time
 import signal
 import argparse
+import logging
 from display_manager import DisplayManager
 from config_loader import Config
 from animation import RandomTwinkle, ScanningChase, LarsonScanner, RelayTest
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger(__name__)
 
 def signal_handler(sig, frame):
     print("\nGracefully shutting down...")
