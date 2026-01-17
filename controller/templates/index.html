@@ -1,15 +1,19 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Relay/LED Controller</title>
+    <title>DESY Plan | Mathematica Control</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono&display=swap"
+        rel="stylesheet">
 </head>
+
 <body>
     <div class="container">
         <header>
-            <h1>Relay/LED Controller</h1>
+            <h1>DESY Plan</h1>
             <div id="status-bar">
                 <span id="environment-badge" class="badge">Loading...</span>
                 <span id="mode-badge" class="badge">Manual Mode</span>
@@ -17,51 +21,64 @@
         </header>
 
         <main>
-            <!-- Animation Controls -->
+            <!-- Animation Controls Cell -->
             <section class="control-panel">
-                <h2>Animation Control</h2>
-                <div class="animation-controls">
-                    <select id="animation-select" class="form-control">
-                        <option value="">Select an animation...</option>
-                    </select>
-                    <button id="start-animation-btn" class="btn btn-primary">Start Animation</button>
-                    <button id="stop-animation-btn" class="btn btn-danger">Stop Animation</button>
-                </div>
-                <div id="animation-info" class="info-box"></div>
-            </section>
-
-            <!-- Manual LED Controls -->
-            <section class="control-panel">
-                <h2>Manual Control</h2>
-                <div class="manual-controls">
-                    <button id="all-on-btn" class="btn btn-success">All On</button>
-                    <button id="all-off-btn" class="btn btn-secondary">All Off</button>
-                    <button id="scan-slaves-btn" class="btn btn-primary">Re-scan Slaves</button>
-                </div>
-
-                <div id="led-grid" class="led-grid">
-                    <!-- LED buttons will be generated here by JavaScript -->
+                <h2>Manipulate[Animations...]</h2>
+                <div class="cell-content">
+                    <div class="animation-controls">
+                        <p>
+                            <select id="animation-select" class="form-control">
+                                <option value="">Select an animation...</option>
+                            </select>
+                        </p>
+                        <p>
+                            <button id="start-animation-btn" class="btn btn-primary">Run[]</button>
+                            <button id="stop-animation-btn" class="btn btn-danger">Abort[]</button>
+                        </p>
+                    </div>
+                    <div id="animation-info" class="info-box"></div>
                 </div>
             </section>
 
-            <!-- Status Display -->
+            <!-- Manual LED Controls Cell -->
             <section class="control-panel">
-                <h2>System Status</h2>
-                <div class="status-info">
-                    <p><strong>Environment:</strong> <span id="env-name">-</span></p>
-                    <p><strong>Description:</strong> <span id="env-description">-</span></p>
-                    <p><strong>Total Outputs:</strong> <span id="total-leds">-</span></p>
-                    <p><strong>Mode:</strong> <span id="current-mode">Manual</span></p>
-                    <p><strong>Animation:</strong> <span id="current-animation">None</span></p>
+                <h2>Grid[Manual_Control...]</h2>
+                <div class="cell-content">
+                    <div class="manual-controls">
+                        <button id="all-on-btn" class="btn btn-success">AllOn</button>
+                        <button id="all-off-btn" class="btn btn-secondary">AllOff</button>
+                        <button id="scan-slaves-btn" class="btn btn-primary">ReScan_Slaves</button>
+                    </div>
+
+                    <div id="led-grid" class="led-grid">
+                        <!-- LED buttons will be generated here by JavaScript -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Status Display Cell -->
+            <section class="control-panel">
+                <h2>System`Status[]</h2>
+                <div class="cell-content">
+                    <div class="status-info">
+                        <p><strong>Environment:</strong> <span id="env-name">-</span></p>
+                        <p><strong>Description:</strong> <span id="env-description">-</span></p>
+                        <p><strong>TotalOutputs:</strong> <span id="total-leds">-</span></p>
+                        <p><strong>CurrentMode:</strong> <span id="current-mode">Manual</span></p>
+                        <p><strong>AnimationRunning:</strong> <span id="current-animation">None</span></p>
+                    </div>
                 </div>
             </section>
         </main>
 
         <footer>
-            <p>Relay Controller Web Interface | <a href="https://github.com/anthropics/claude-code" target="_blank">Built with Claude Code</a></p>
+            <p><strong>DESY Plan</strong> Control Interface | Academic Retrofit System</p>
         </footer>
     </div>
 
+    <div id="toast-container"></div>
+
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>
+
 </html>

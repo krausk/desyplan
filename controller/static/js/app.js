@@ -103,19 +103,31 @@ function updateUI(status) {
     updateButtonStates(status);
 }
 
+function createLEDButton(index) {
+    const button = document.createElement('button');
+    button.className = 'led-button';
+    button.dataset.index = index;
+
+    button.innerHTML = `
+        <div class="led-indicator"></div>
+        <span class="led-index">Out[${index}]</span>
+        <span class="led-status">Inactive</span>
+    `;
+
+    button.addEventListener('click', () => {
+        const isCurrentlyActive = button.classList.contains('active');
+        toggleLED(index, !isCurrentlyActive);
+    });
+
+    return button;
+}
+
 function createLEDGrid(totalLEDs) {
     const grid = document.getElementById('led-grid');
     grid.innerHTML = '';
 
     for (let i = 0; i < totalLEDs; i++) {
-        const button = document.createElement('button');
-        button.className = 'led-button';
-        button.dataset.index = i;
-        button.innerHTML = `
-            <span class="led-index">LED ${i}</span>
-            <span class="led-status">OFF</span>
-        `;
-        button.addEventListener('click', () => toggleLED(i));
+        const button = createLEDButton(i);
         grid.appendChild(button);
     }
 }
@@ -135,12 +147,13 @@ function updateLEDStates(states, slaveOnline, ledsPerSlave) {
             } else {
                 button.classList.remove('disconnected');
                 button.disabled = false;
+
                 if (state) {
                     button.classList.add('active');
-                    button.querySelector('.led-status').textContent = 'ON';
+                    button.querySelector('.led-status').textContent = 'ACTIVE';
                 } else {
                     button.classList.remove('active');
-                    button.querySelector('.led-status').textContent = 'OFF';
+                    button.querySelector('.led-status').textContent = 'INACTIVE';
                 }
             }
         }
@@ -235,9 +248,10 @@ function formatAnimationName(id) {
 }
 
 // LED Control Functions
-async function toggleLED(index) {
+async function toggleLED(index, state = null) {
     try {
-        const result = await apiRequest(`led/${index}`, 'POST', {});
+        const payload = state !== null ? { state: state ? 1 : 0 } : {};
+        const result = await apiRequest(`led/${index}`, 'POST', payload);
         await updateStatus();
     } catch (error) {
         console.error(`Failed to toggle LED ${index}:`, error);
