@@ -12,7 +12,7 @@ def signal_handler(sig, frame):
 
 def main():
     parser = argparse.ArgumentParser(description="Relay Controller Master")
-    parser.add_argument('--scan', action='store_true', help='Scan I2C bus for slaves')
+    parser.add_argument('--scan', action='store_true', help='Scan serial ports for slaves')
     parser.add_argument('--test', action='store_true', help='Run diagnostic relay test')
     parser.add_argument('--env', type=str, help='Override environment from config.yaml')
     args = parser.parse_args()

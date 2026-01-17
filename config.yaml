@@ -11,8 +11,8 @@ environments:
       num_slaves: 6
       leds_per_slave: 96
       total_leds: 576
-      i2c_addresses: [0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D]
-      i2c_bus: 1
+      serial_ports: ["/dev/ttyUSB0", "/dev/ttyUSB1", "/dev/ttyUSB2", "/dev/ttyUSB3", "/dev/ttyUSB4", "/dev/ttyUSB5"]
+      serial_baudrate: 115200
     timing:
       min_relay_delay: 0.05  # 50ms minimum delay between state changes (software)
       min_toggle_interval_ms: 20  # 20ms minimum per relay (firmware)
@@ -28,8 +28,8 @@ environments:
       num_slaves: 1
       leds_per_slave: 3
       total_leds: 3
-      i2c_addresses: [0x08]
-      i2c_bus: 1
+      serial_ports: ["/dev/ttyUSB0"]
+      serial_baudrate: 115200
       # Explicit pin mapping for test LEDs
       pin_mapping:
         0: 13  # Built-in LED

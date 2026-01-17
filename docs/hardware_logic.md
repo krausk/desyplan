@@ -27,22 +27,14 @@ To protect the relays and ensure reliability:
   > The **Ground (GND)** of the 5V supply (Arduino/Pi) and the 12V supply (Relays) MUST be connected together. Without a common ground, the transistors cannot switch the 12V load reference.
 
 ### Signal Chain
-1. **Raspberry Pi**: Sends 96-bit state via I2C to Arduino.
-2. **Arduino Mega**: Receiving Slave (Addr 0x08-0x0D). Maps bits to GPIO pins.
+1. **Raspberry Pi**: Sends 96-bit state via **USB Serial** to each Arduino.
+2. **Arduino Mega**: Receiving Slave. Maps bits to GPIO pins.
 3. **GPIO Pin**: Outputs 5V High/Low.
 4. **NPN Transistor**: Base receives 5V (via resistor). Collector sinks relay coil to Ground.
 5. **Relay Coil**: Energizes from 12V rail, switching the contact.
 
-## I2C Addressing
-| Device | Address | Role |
-| :--- | :--- | :--- |
-| Raspberry Pi | Master | Animation Controller |
-| Mega 1 | 0x08 | Slave Driver |
-| Mega 2 | 0x09 | Slave Driver |
-| Mega 3 | 0x0A | Slave Driver |
-| Mega 4 | 0x0B | Slave Driver |
-| Mega 5 | 0x0C | Slave Driver |
-| Mega 6 | 0x0D | Slave Driver |
+## Serial Port Mapping
+The system identifies each of the 6 Arduinos by their USB Serial port. By default, these are assigned as `/dev/ttyUSB0` through `/dev/ttyUSB5` on the Raspberry Pi.
 
 ## Firmware Guard Constraints
 - **MIN_INTERVAL**: 20ms (Hard limit in firmware).

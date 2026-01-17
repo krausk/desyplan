@@ -5,11 +5,11 @@ This guide explains how to use the simplified test setup with 1 Arduino UNO and 
 ## Hardware Setup
 
 ### Required Components
-- 1x Raspberry Pi (any model with I2C)
+- 1x Raspberry Pi (any model with USB ports)
 - 1x Arduino UNO
+- 1x USB Cable (Type-A to Type-B for UNO)
 - 3x LEDs (or use Arduino's built-in LED on pin 13)
 - 3x 220Ω resistors (if using external LEDs)
-- I2C level shifter (3.3V ↔ 5V) - **CRITICAL**
 - Jumper wires
 - Breadboard (optional)
 
@@ -18,11 +18,8 @@ This guide explains how to use the simplified test setup with 1 Arduino UNO and 
 ```
 Raspberry Pi                Arduino UNO
 -----------                -----------
-Pin 3 (SDA) ─────┐
-                 ├─→ Level Shifter ─→ A4 (SDA)
-Pin 5 (SCL) ─────┘                     A5 (SCL)
-
-GND ─────────────────────────────────→ GND (common ground)
+USB Port 1 <──────────────> USB Port
+                             (Serial)
 
 Arduino UNO Pins:
 - Pin 13 → LED1 (+ resistor) → GND  [Built-in LED also works]
@@ -30,11 +27,11 @@ Arduino UNO Pins:
 - Pin 8  → LED3 (+ resistor) → GND
 ```
 
-**Important**: The level shifter is **mandatory**. Raspberry Pi uses 3.3V logic, Arduino UNO uses 5V logic.
+**Note**: Direct USB connection provides both power and communication. No level shifter or separate power supply is needed for this test setup.
 
 ## Software Configuration
 
-The system uses `config.yaml` to manage different environments. The test environment is already configured.
+The system uses `config.yaml` to manage different environments. The test environment is already configured for Serial communication.
 
 ### 1. Verify Configuration
 
@@ -51,8 +48,8 @@ environments:
       num_slaves: 1
       leds_per_slave: 3
       total_leds: 3
-      i2c_addresses: [0x08]
-      i2c_bus: 1
+      serial_ports: ["/dev/ttyUSB0"]
+      serial_baudrate: 115200
       pin_mapping:
         0: 13  # Built-in LED
         1: 12
@@ -120,23 +117,17 @@ arduino-cli compile --fqbn arduino:avr:uno .
 arduino-cli upload --fqbn arduino:avr:uno --port /dev/ttyUSB0 .
 ```
 
-### Step 2: Verify I2C Connection on Raspberry Pi
+### Step 2: Verify Serial Connection on Raspberry Pi
 
 ```bash
-# Enable I2C if not already enabled
-sudo raspi-config
-# Navigate to: Interface Options → I2C → Enable
+# List all serial ports to find your Arduino
+ls -l /dev/tty* | grep -E 'USB|ACM'
 
-# Scan I2C bus (should show device at 0x08)
-i2cdetect -y 1
+# Or use arduino-cli to detect the board
+arduino-cli board list
 ```
 
-Expected output:
-```
-     0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f
-00:          -- -- -- -- -- 08 -- -- -- -- -- -- --
-...
-```
+Expected output should show `/dev/ttyUSB0` or `/dev/ttyACM0` (or similar).
 
 ### Step 3: Test the Python Controller
 
@@ -159,7 +150,7 @@ The web interface lets you:
 ```bash
 cd controller
 
-# Scan for I2C devices
+# Check serial connections
 python3 main.py --scan
 
 # Run simple test patterns (recommended for 3-LED setup)
@@ -190,7 +181,7 @@ python3 controller/simple_test.py
 Works with both environments. For test setup:
 
 ```bash
-# Scan I2C bus
+# Scan serial ports
 python3 controller/main.py --scan
 
 # Run diagnostic test
@@ -236,32 +227,29 @@ sudo usermod -a -G dialout $USER
 # Log out and back in for changes to take effect
 ```
 
-### I2C Not Working on Raspberry Pi
+### Serial Connection Issues
 
-```bash
-# Check if I2C is enabled
-ls /dev/i2c-*
-
-# Should show: /dev/i2c-1
-
-# Test I2C with i2cdetect
-sudo apt-get install i2c-tools
-i2cdetect -y 1
-
-# Check for errors in dmesg
-dmesg | grep i2c
-```
+1. Check if the USB cable is securely connected.
+2. Verify the port in `config.yaml` matches the one found with `arduino-cli board list`.
+3. Check permissions:
+   ```bash
+   sudo usermod -a -G dialout $USER
+   # Log out and back in for changes to take effect
+   ```
+4. Check for kernel errors:
+   ```bash
+   dmesg | grep -E 'tty|usb'
+   ```
 
 ### LEDs Not Lighting Up
 
-1. Check wiring (especially common ground)
-2. Verify I2C address (should be 0x08 in firmware and config)
-3. Test with Arduino Serial Monitor:
-   - Open Serial Monitor at 115200 baud
-   - You should see "Test Controller Initialized on 0x08"
-   - LEDs changes should print "LED X (Pin Y): ON/OFF"
-4. Check LED polarity (long leg = positive)
-5. Verify resistor values (220Ω recommended)
+1. Check wiring (ensure LEDs are connected to the correct pins: 13, 12, 8).
+2. Test with Arduino Serial Monitor:
+   - Open Serial Monitor at 115200 baud.
+   - You should see "Test Controller Initialized (USB Serial)".
+   - LED changes should print "LED X (Pin Y): ON/OFF".
+3. Check LED polarity (long leg = positive).
+4. Verify resistor values (220Ω recommended).
 
 ### Python Import Errors
 
@@ -284,7 +272,6 @@ python3 -c "from config_loader import Config; print('OK')"
 When ready to deploy to production:
 1. Change `active_environment: production` in `config.yaml`
 2. Flash each of the 6 Arduino Megas with `firmware/SlaveController/SlaveController.ino`
-   - Update `I2C_ADDRESS` in firmware for each board (0x08-0x0D)
 3. Run on production hardware
 
 ## Next Steps

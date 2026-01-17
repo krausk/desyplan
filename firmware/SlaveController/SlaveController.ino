@@ -1,18 +1,16 @@
 /**
  * Relay-Aware LED Retrofit Firmware
  * Target: Arduino Mega 2560
- * Role: I2C Slave
+ * Role: USB Serial Slave
  *
  * Logic:
- * - Receives 12 bytes (96 bits) from Master via I2C.
- * - Comparing received state with current state.
+ * - Receives 12 bytes (96 bits) from Master via USB Serial.
+ * - Protocol: [0xFF 0xAA] [LENGTH] [DATA...] [0x55 0xFF]
+ * - Compares received state with current state.
  * - Enforces minimum settling time for mechanical relays.
  */
 
-#include <Wire.h>
-
 // --- Configuration ---
-#define I2C_ADDRESS 0x08 // CHANGE THIS for each board (0x08 - 0x0D)
 #define NUM_LEDS 96
 #define BYTES_PER_FRAME 12
 #define MIN_TOGGLE_INTERVAL_MS 20
@@ -26,9 +24,20 @@ int ledPins[NUM_LEDS];
 byte currentLedState[BYTES_PER_FRAME];  // Helper to track bitset state
 unsigned long lastToggleTime[NUM_LEDS]; // Timestamp for each relay
 
-// Buffer for incoming I2C data
-volatile byte incomingData[BYTES_PER_FRAME];
-volatile bool newDataAvailable = false;
+// Serial communication state machine
+enum SerialState {
+  WAITING_START1,    // Waiting for 0xFF
+  WAITING_START2,    // Waiting for 0xAA
+  WAITING_LENGTH,    // Waiting for length byte
+  READING_DATA,      // Reading data bytes
+  WAITING_END1,      // Waiting for 0x55
+  WAITING_END2       // Waiting for 0xFF
+};
+
+SerialState serialState = WAITING_START1;
+byte dataLength = 0;
+byte dataBuffer[BYTES_PER_FRAME];
+byte dataIndex = 0;
 
 void setup() {
   // Initialize Pin Mapping
@@ -53,36 +62,75 @@ void setup() {
 
   // Clear state buffers
   memset(currentLedState, 0, BYTES_PER_FRAME);
-  memset((void *)incomingData, 0, BYTES_PER_FRAME);
+  memset(dataBuffer, 0, BYTES_PER_FRAME);
 
-  // Initialize I2C
-  Wire.begin(I2C_ADDRESS);
-  Wire.onReceive(receiveEvent);
-
+  // Initialize Serial
   Serial.begin(115200);
-  Serial.print("Slave Initialized on 0x");
-  Serial.println(I2C_ADDRESS, HEX);
+
+  // Startup message
+  Serial.println("Slave Controller Initialized (USB Serial)");
+  Serial.print("Managing ");
+  Serial.print(NUM_LEDS);
+  Serial.println(" relay outputs");
+  Serial.println("Ready to receive commands...");
 }
 
 void loop() {
-  if (newDataAvailable) {
-    processLedState();
-    newDataAvailable = false; // Acknowledgement
+  // Process incoming serial data
+  if (Serial.available() > 0) {
+    byte incomingByte = Serial.read();
+    processSerialByte(incomingByte);
   }
 }
 
-// I2C Interrupt Handler
-// Stores data into a buffer to keep ISR short.
-void receiveEvent(int howMany) {
-  if (howMany == BYTES_PER_FRAME) {
-    for (int i = 0; i < BYTES_PER_FRAME; i++) {
-      incomingData[i] = Wire.read();
-    }
-    newDataAvailable = true;
-  } else {
-    // Flush invalid packet
-    while (Wire.available())
-      Wire.read();
+void processSerialByte(byte b) {
+  switch (serialState) {
+    case WAITING_START1:
+      if (b == 0xFF) {
+        serialState = WAITING_START2;
+      }
+      break;
+
+    case WAITING_START2:
+      if (b == 0xAA) {
+        serialState = WAITING_LENGTH;
+      } else {
+        serialState = WAITING_START1;  // Reset on error
+      }
+      break;
+
+    case WAITING_LENGTH:
+      dataLength = b;
+      dataIndex = 0;
+      if (dataLength > 0 && dataLength <= BYTES_PER_FRAME) {
+        serialState = READING_DATA;
+      } else {
+        serialState = WAITING_START1;  // Invalid length, reset
+      }
+      break;
+
+    case READING_DATA:
+      dataBuffer[dataIndex++] = b;
+      if (dataIndex >= dataLength) {
+        serialState = WAITING_END1;
+      }
+      break;
+
+    case WAITING_END1:
+      if (b == 0x55) {
+        serialState = WAITING_END2;
+      } else {
+        serialState = WAITING_START1;  // Reset on error
+      }
+      break;
+
+    case WAITING_END2:
+      if (b == 0xFF) {
+        // Valid packet received! Process it.
+        processLedState();
+      }
+      serialState = WAITING_START1;  // Always reset state
+      break;
   }
 }
 
@@ -90,11 +138,8 @@ void receiveEvent(int howMany) {
 void processLedState() {
   unsigned long now = millis();
 
-  for (int byteIdx = 0; byteIdx < BYTES_PER_FRAME; byteIdx++) {
-    byte incomingByte = incomingData[byteIdx];
-    // Check if this byte has any changes compared to current known state
-    // Optimization: if byte is same, skip bit checking
-    // NOTE: We do bit checking anyway to enforce per-pin timing
+  for (int byteIdx = 0; byteIdx < dataLength && byteIdx < BYTES_PER_FRAME; byteIdx++) {
+    byte incomingByte = dataBuffer[byteIdx];
 
     for (int bitIdx = 0; bitIdx < 8; bitIdx++) {
       int globalLedIndex = (byteIdx * 8) + bitIdx;

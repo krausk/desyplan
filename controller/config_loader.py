@@ -42,8 +42,9 @@ class Config:
                         'num_slaves': 6,
                         'leds_per_slave': 96,
                         'total_leds': 576,
-                        'i2c_addresses': [0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D],
-                        'i2c_bus': 1
+                        'serial_ports': ["/dev/ttyUSB0", "/dev/ttyUSB1", "/dev/ttyUSB2",
+                                        "/dev/ttyUSB3", "/dev/ttyUSB4", "/dev/ttyUSB5"],
+                        'serial_baudrate': 115200
                     },
                     'timing': {
                         'min_relay_delay': 0.05
@@ -65,12 +66,12 @@ class Config:
         return self.env_config['hardware']['total_leds']
 
     @property
-    def i2c_addresses(self):
-        return self.env_config['hardware']['i2c_addresses']
+    def serial_ports(self):
+        return self.env_config['hardware']['serial_ports']
 
     @property
-    def i2c_bus(self):
-        return self.env_config['hardware']['i2c_bus']
+    def serial_baudrate(self):
+        return self.env_config['hardware'].get('serial_baudrate', 115200)
 
     @property
     def min_relay_delay(self):
@@ -95,8 +96,8 @@ class Config:
         print(f"  Number of Slaves: {self.num_slaves}")
         print(f"  LEDs per Slave: {self.leds_per_slave}")
         print(f"  Total LEDs: {self.total_leds}")
-        print(f"  I2C Addresses: {[hex(addr) for addr in self.i2c_addresses]}")
-        print(f"  I2C Bus: {self.i2c_bus}")
+        print(f"  Serial Ports: {self.serial_ports}")
+        print(f"  Serial Baudrate: {self.serial_baudrate}")
         if self.get_pin_mapping():
             print(f"  Pin Mapping: {self.get_pin_mapping()}")
         print(f"\nTiming Configuration:")

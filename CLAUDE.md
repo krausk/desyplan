@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a retrofit project replacing the original controller of a fire alarm panel with a **Raspberry Pi (Master)** controlling **6x Arduino Mega 2560s (Slaves)** via I2C. The system drives 576 electromechanical relays (Panasonic TN2-12V) through WAS-DA2 driver boards to create LED-like visual animations.
+This is a retrofit project replacing the original controller of a fire alarm panel with a **Raspberry Pi (Master)** controlling **6x Arduino Mega 2560s (Slaves)** via USB Serial. The system drives 576 electromechanical relays (Panasonic TN2-12V) through WAS-DA2 driver boards to create LED-like visual animations.
 
 **Key Safety Constraint**: The output devices are mechanical relays, NOT LEDs. They have physical limitations:
 - **Mechanical switching time**: ~2-3ms
@@ -29,7 +29,7 @@ python3 controller/main.py --env production
 ```
 
 The configuration system controls:
-- Number of slaves and I2C addresses
+- Number of slaves and USB serial ports
 - Total number of outputs (LEDs/relays)
 - Timing parameters (delays for relay safety or LED visibility)
 - Firmware source files and Arduino board types
@@ -48,14 +48,14 @@ See `TEST_SETUP.md` for detailed instructions on the 3-LED test environment.
 **Production Environment**:
 ```
 Raspberry Pi (Master, Python)
-    ↓ I2C (3.3V ↔ 5V via level shifter)
+    ↓ USB Serial
     ↓
-├─ Arduino Mega #1 (0x08) ─→ 96 relays via GPIO pins
-├─ Arduino Mega #2 (0x09) ─→ 96 relays
-├─ Arduino Mega #3 (0x0A) ─→ 96 relays
-├─ Arduino Mega #4 (0x0B) ─→ 96 relays
-├─ Arduino Mega #5 (0x0C) ─→ 96 relays
-└─ Arduino Mega #6 (0x0D) ─→ 96 relays
+├─ Arduino Mega #1 (/dev/ttyUSB0) ─→ 96 relays via GPIO pins
+├─ Arduino Mega #2 (/dev/ttyUSB1) ─→ 96 relays
+├─ Arduino Mega #3 (/dev/ttyUSB2) ─→ 96 relays
+├─ Arduino Mega #4 (/dev/ttyUSB3) ─→ 96 relays
+├─ Arduino Mega #5 (/dev/ttyUSB4) ─→ 96 relays
+└─ Arduino Mega #6 (/dev/ttyUSB5) ─→ 96 relays
 ```
 
 Total: 576 independently controllable relays (treated as "LEDs" in code comments)
@@ -63,9 +63,9 @@ Total: 576 independently controllable relays (treated as "LEDs" in code comments
 **Test Environment**:
 ```
 Raspberry Pi (Master, Python)
-    ↓ I2C (3.3V ↔ 5V via level shifter)
+    ↓ USB Serial
     ↓
-└─ Arduino UNO (0x08) ─→ 3 LEDs (pins 13, 12, 8)
+└─ Arduino UNO (/dev/ttyUSB0) ─→ 3 LEDs (pins 13, 12, 8)
 ```
 
 Total: 3 LEDs for development and testing
@@ -77,15 +77,15 @@ Total: 3 LEDs for development and testing
 - `controller/web_server.py` - Flask web interface with API endpoints
 - `controller/config_loader.py` - Environment configuration loader (reads config.yaml)
 - `controller/display_manager.py` - High-level display abstraction (buffer management)
-- `controller/relay_controller.py` - I2C communication layer, frame dispatch to slaves
+- `controller/relay_controller.py` - USB Serial communication layer, frame dispatch to slaves
 - `controller/animation.py` - Animation classes with relay-safe timing enforcement
 - `controller/simple_test.py` - Simple test patterns for 3-LED setup
 - `controller/templates/` - HTML templates for web interface
 - `controller/static/` - CSS and JavaScript for web interface
 
 **Arduino Firmware**:
-- `firmware/SlaveController/SlaveController.ino` - I2C slave for production (Arduino Mega)
-- `firmware/TestController/TestController.ino` - I2C slave for test (Arduino UNO, 3 LEDs)
+- `firmware/SlaveController/SlaveController.ino` - USB Serial slave for production (Arduino Mega)
+- `firmware/TestController/TestController.ino` - USB Serial slave for test (Arduino UNO, 3 LEDs)
 
 **Build Tools**:
 - `build.sh` - Shell wrapper for firmware deployment
@@ -95,8 +95,8 @@ Total: 3 LEDs for development and testing
 1. Animation generates frame (576-bit array)
 2. `DisplayManager` buffers state changes
 3. `RelayController` splits frame into 6 chunks (96 bits each)
-4. Each chunk packed into 12 bytes and sent via I2C to corresponding Arduino
-5. Arduino unpacks, enforces MIN_TOGGLE_INTERVAL (20ms), updates GPIO pins
+4. Each chunk packed into 12 bytes and sent via USB Serial to corresponding Arduino
+5. Arduino receives packet via serial protocol, unpacks, enforces MIN_TOGGLE_INTERVAL (20ms), updates GPIO pins
 
 ## Common Commands
 
@@ -134,11 +134,11 @@ python3 controller/web_server.py --host 0.0.0.0 --port 5000 --env test
 # Access at http://raspberry-pi-ip:5000
 ```
 
-Scan I2C bus to verify slaves are detected:
+Scan serial ports to verify slaves are detected:
 ```bash
 python3 controller/main.py --scan
-# Production: Should show 0x08 through 0x0D
-# Test: Should show 0x08 only
+# Production: Should show /dev/ttyUSB0 through /dev/ttyUSB5
+# Test: Should show /dev/ttyUSB0 only
 ```
 
 Run diagnostic test pattern:
@@ -146,11 +146,10 @@ Run diagnostic test pattern:
 python3 controller/main.py --test
 ```
 
-Verify I2C devices on the Pi hardware:
+Verify serial devices on the Pi hardware:
 ```bash
-i2cdetect -y 1
-# Production: Should show devices at 0x08 through 0x0D
-# Test: Should show device at 0x08
+ls -l /dev/ttyUSB*
+# Should show all connected Arduino devices
 ```
 
 ### Firmware Deployment (Development Machine → Arduino)
@@ -173,10 +172,7 @@ i2cdetect -y 1
 
 For production (Arduino Mega 2560):
 ```bash
-# Update I2C address in firmware first!
-# Edit firmware/SlaveController/SlaveController.ino
-# #define I2C_ADDRESS 0x08  // Change to 0x08-0x0D for each board
-
+# No configuration changes needed - all boards use the same firmware
 arduino-cli compile --fqbn arduino:avr:mega firmware/SlaveController
 arduino-cli upload -p /dev/ttyUSB0 --fqbn arduino:avr:mega firmware/SlaveController
 ```
@@ -216,20 +212,30 @@ The Arduino firmware currently uses a simplified placeholder mapping (`SlaveCont
 
 **If hardware requires custom mapping**, edit the `ledPins[]` initialization in `setup()` to match the physical ribbon cable connections.
 
-### I2C Protocol
+### USB Serial Protocol
 
-**Frame structure**:
-- Command byte: `0x00` (arbitrary, not interpreted by firmware)
-- Data: 12 bytes representing 96 bits (LSB-first bit packing)
+**Packet structure**:
+- Start marker: `0xFF 0xAA` (2 bytes)
+- Length: 1 byte (number of data bytes, typically 12 for production, 1 for test)
+- Data: N bytes representing relay states (LSB-first bit packing)
+- End marker: `0x55 0xFF` (2 bytes)
 
-**Bit packing** (`relay_controller.py:71-81`):
+**Example packet (test environment - 3 LEDs)**:
+`0xFF 0xAA 0x01 0x05 0x55 0xFF` - Sets LEDs 0 and 2 ON (binary 101)
+
+**Bit packing** (`relay_controller.py:165-175`):
 - Each byte stores 8 relay states
 - Bit 0 (LSB) = first relay in that group of 8
 
+**Arduino side**:
+- State machine parses incoming bytes
+- Validates packet structure before processing
+- Resets to initial state on any error
+
 ### Power Requirements
 
-**Critical wiring rules** (from `docs/hardware_logic.md`):
-- 5V logic supply for Pi and Arduinos
+**Critical wiring rules**:
+- 5V USB power for Arduinos (from Raspberry Pi USB ports or powered hub)
 - 12V supply for relay coils
 - **Common ground between all power supplies is mandatory**
 - Flyback diodes (1N4007) must be present on relay coils to prevent back-EMF damage
@@ -239,10 +245,11 @@ The Arduino firmware currently uses a simplified placeholder mapping (`SlaveCont
 **DO NOT**:
 - Create animations with frame rates faster than 20 FPS (50ms/frame)
 - Toggle large numbers of relays simultaneously (mechanical/acoustic issue)
-- Skip the level shifter on I2C lines (Pi uses 3.3V, Arduino uses 5V)
 - Power relay coils from Arduino pins (use transistor driver boards)
+- Connect more than one Arduino to a single USB port (use powered USB hub for production)
 
 **DO**:
 - Test new animations with `--test` flag first
-- Verify I2C connectivity with `--scan` before troubleshooting animation issues
-- Use `i2cdetect` on the Pi to verify hardware before blaming code
+- Verify serial connectivity with `--scan` before troubleshooting animation issues
+- Use `ls -l /dev/ttyUSB*` on the Pi to verify hardware connections
+- Ensure all Arduinos have unique, stable USB port assignments (use udev rules if needed)

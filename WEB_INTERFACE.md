@@ -294,10 +294,11 @@ hostname -I
 
 ### LEDs Not Responding
 
-1. Check I2C connection: `i2cdetect -y 1`
-2. Verify Arduino is running (check Serial Monitor)
-3. Check web server logs for errors
-4. Ensure config.yaml matches your hardware setup
+1. Check USB connection: `ls -l /dev/ttyUSB*`
+2. Run `python3 controller/main.py --scan` to verify all slaves are detected.
+3. Verify Arduino is running (check Serial Monitor).
+4. Check web server logs for errors.
+5. Ensure `config.yaml` matches your hardware setup.
 
 ### Browser Shows Old Interface
 

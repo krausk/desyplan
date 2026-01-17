@@ -1,6 +1,6 @@
 # Relay Controller Retrofit Project
 
-A modular I2C-based controller system with support for multiple environments.
+A modular USB Serial-based controller system with support for multiple environments.
 
 ## Environments
 
@@ -10,7 +10,7 @@ A modular I2C-based controller system with support for multiple environments.
 - **Outputs**: 576 mechanical relays
 - **Purpose**: Full fire alarm panel retrofit
 
-### Test (NEW!)
+### Test
 - **Master**: Raspberry Pi (Python)
 - **Slave**: 1x Arduino UNO
 - **Outputs**: 3 LEDs (pins 13, 12, 8)
@@ -34,7 +34,7 @@ See **[TEST_SETUP.md](TEST_SETUP.md)** for detailed instructions.
 Quick steps:
 1. Set `active_environment: test` in `config.yaml`
 2. Wire 3 LEDs to Arduino UNO (pins 13, 12, 8)
-3. Connect UNO to Raspberry Pi via I2C (with level shifter!)
+3. Connect UNO to Raspberry Pi via USB cable
 4. Flash firmware: `./build.sh --port /dev/ttyUSB0`
 5. Run test: `python3 controller/simple_test.py`
 
@@ -52,23 +52,19 @@ Use the build script:
 ./build.sh --compile-only  # Verify compilation
 ```
 
-For each Arduino Mega, update the I2C address in `firmware/SlaveController/SlaveController.ino`:
-```cpp
-#define I2C_ADDRESS 0x08  // Change to 0x08, 0x09, 0x0A, 0x0B, 0x0C, or 0x0D
-```
-
-Then flash:
+All Arduino Megas use the same firmware (no address configuration needed).
+Flash each one:
 ```bash
 ./build.sh --port /dev/ttyUSB0 --env production
 ```
 
 #### 3. Raspberry Pi Setup
-1. Enable I2C: `sudo raspi-config` → Interface Options → I2C
-2. Install dependencies:
+1. Install dependencies:
    ```bash
    pip3 install -r requirements.txt
    ```
-3. Verify I2C: `i2cdetect -y 1` (should show 0x08-0x0D)
+2. Connect all 6 Arduino Megas via USB (use powered USB hub if needed)
+3. Verify connections: `ls -l /dev/ttyUSB*` (should show /dev/ttyUSB0 through /dev/ttyUSB5)
 
 #### 4. Run Controller
 
@@ -100,7 +96,7 @@ python3 controller/main.py
 # Or run diagnostic test
 python3 controller/main.py --test
 
-# Or scan I2C bus
+# Or scan serial ports
 python3 controller/main.py --scan
 ```
 
@@ -170,7 +166,7 @@ The web server also provides a REST API:
 
 The system is configured via `config.yaml`. Key parameters:
 - `active_environment`: Switch between `test` and `production`
-- Hardware settings: slave count, I2C addresses, pin mappings
+- Hardware settings: slave count, serial ports, pin mappings
 - Timing parameters: relay delays, toggle intervals
 - Firmware paths: source files and board types
 
@@ -182,16 +178,21 @@ python3 controller/main.py --env test
 ## Troubleshooting
 
 - **No response from slaves?**
-  - Check I2C wiring and level shifter (3.3V ↔ 5V)
-  - Run `i2cdetect -y 1` to verify addresses
-  - Ensure common ground between Pi and Arduinos
+  - Check USB connections: `ls -l /dev/ttyUSB*`
+  - Run `python3 controller/main.py --scan` to verify connections
+  - Ensure common ground between Pi and Arduinos (12V relay supply)
+  - Check if Arduino is enumerated: `dmesg | grep ttyUSB`
 
 - **Flickering or erratic behavior?**
-  - Verify power supply is adequate
-  - Check I2C pull-up resistors (4.7kΩ recommended)
+  - Verify power supply is adequate (use powered USB hub for production)
   - Ensure MIN_TOGGLE_INTERVAL timing is respected
+  - Check USB cable quality (bad cables cause communication errors)
 
 - **Firmware upload fails?**
   - Check USB cable and port (`ls /dev/tty{USB,ACM}*`)
   - Verify user is in `dialout` group: `sudo usermod -a -G dialout $USER`
   - Try different USB port or cable
+
+- **Serial port assignments change on reboot?**
+  - Create udev rules to assign stable device names based on serial numbers
+  - See `/etc/udev/rules.d/99-arduino.rules` for examples
