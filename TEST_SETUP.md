@@ -24,7 +24,7 @@ USB Port 1 <──────────────> USB Port
 Arduino UNO Pins:
 - Pin 13 → LED1 (+ resistor) → GND  [Built-in LED also works]
 - Pin 12 → LED2 (+ resistor) → GND
-- Pin 8  → LED3 (+ resistor) → GND
+- Pin 11  → LED3 (+ resistor) → GND
 ```
 
 **Note**: Direct USB connection provides both power and communication. No level shifter or separate power supply is needed for this test setup.
@@ -53,14 +53,14 @@ environments:
       pin_mapping:
         0: 13  # Built-in LED
         1: 12
-        2: 8
+        2: 11
     timing:
       min_relay_delay: 0.1  # 100ms for visible LED changes
       min_toggle_interval_ms: 10  # LEDs can switch faster
     firmware:
       source: "firmware/TestController/TestController.ino"
       board: "arduino:avr:uno"
-      pins: [13, 12, 8]
+      pins: [13, 12, 11]
 ```
 
 ### 2. Install Dependencies

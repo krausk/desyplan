@@ -65,7 +65,7 @@ Total: 576 independently controllable relays (treated as "LEDs" in code comments
 Raspberry Pi (Master, Python)
     ↓ USB Serial
     ↓
-└─ Arduino UNO (/dev/ttyUSB0) ─→ 3 LEDs (pins 13, 12, 8)
+└─ Arduino UNO (/dev/ttyUSB0) ─→ 3 LEDs (pins 13, 12, 11)
 ```
 
 Total: 3 LEDs for development and testing

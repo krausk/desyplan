@@ -19,7 +19,7 @@ All devices are connected via a powered USB hub. Each Arduino is identified by i
 ## 3. Power Strategy (Critical)
 To handle the high current requirements of 576 LEDs and ensure stability:
 1.  **Logic Power**:
-    - Power the Raspberry Pi via its dedicated USB-C power supply.
+    - Power the Raspberry Pi via its dedicated USB power supply.
     - Power the 6 Arduinos via a **Powered USB Hub**. This prevents the Pi from having to supply current for all 6 boards.
 2.  **LED Power (High Current)**:
     - Use separate high-current power supplies to power the driver boards directly.

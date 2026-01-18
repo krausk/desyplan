@@ -34,11 +34,33 @@ environments:
       pin_mapping:
         0: 13  # Built-in LED
         1: 12
-        2: 8
+        2: 11
     timing:
       min_relay_delay: 0.1  # 100ms for visible LED changes
       min_toggle_interval_ms: 10  # LEDs can switch faster than relays
     firmware:
       source: "firmware/TestController/TestController.ino"
       board: "arduino:avr:uno"
-      pins: [13, 12, 8]
+      pins: [13, 12, 11]
+
+  testtwo:
+    description: "Test setup with 1 Arduino UNO and 1 Arduino MEGA controlling each 3 LEDs"
+    hardware:
+      controller_type: "Arduino"
+      num_slaves: 1
+      leds_per_slave: 3
+      total_leds: 6
+      serial_ports: ["/dev/ttyACM0", "/dev/ttyACM1"]
+      serial_baudrate: 115200
+      # Explicit pin mapping for test LEDs
+      pin_mapping:
+        0: 13  # Built-in LED
+        1: 12
+        2: 11
+    timing:
+      min_relay_delay: 0.1  # 100ms for visible LED changes
+      min_toggle_interval_ms: 10  # LEDs can switch faster than relays
+    firmware:
+      source: "firmware/TestController/TestController.ino"
+      board: "arduino:avr:uno"
+      pins: [13, 12, 11]

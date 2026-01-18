@@ -4,7 +4,7 @@
  * Role: USB Serial Slave
  *
  * Purpose: Simple 3-LED test setup for development and testing
- * Controls 3 LEDs on pins 13, 12, and 8
+ * Controls 3 LEDs on pins 13, 12, and 11
  *
  * Logic:
  * - Receives data from Master via USB Serial
@@ -17,7 +17,7 @@
 #define MIN_TOGGLE_INTERVAL_MS 10 // Faster for LEDs vs mechanical relays
 
 // Pin mapping for the 3 LEDs
-const int ledPins[NUM_LEDS] = {13, 12, 8};
+const int ledPins[NUM_LEDS] = {13, 12, 11};
 
 // State tracking
 bool currentLedState[NUM_LEDS];
@@ -54,7 +54,7 @@ void setup() {
   Serial.println("Test Controller Initialized (USB Serial)");
   Serial.print("Controlling ");
   Serial.print(NUM_LEDS);
-  Serial.println(" LEDs on pins: 13, 12, 8");
+  Serial.println(" LEDs on pins: 13, 12, 11");
   Serial.println("Ready to receive commands...");
 }
 

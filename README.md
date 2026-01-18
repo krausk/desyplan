@@ -13,7 +13,7 @@ A modular USB Serial-based controller system with support for multiple environme
 ### Test
 - **Master**: Raspberry Pi (Python)
 - **Slave**: 1x Arduino UNO
-- **Outputs**: 3 LEDs (pins 13, 12, 8)
+- **Outputs**: 3 LEDs (pins 13, 12, 11)
 - **Purpose**: Development and testing without full hardware
 
 Switch environments by editing `config.yaml` or using the `--env` flag.
@@ -33,7 +33,7 @@ See **[TEST_SETUP.md](TEST_SETUP.md)** for detailed instructions.
 
 Quick steps:
 1. Set `active_environment: test` in `config.yaml`
-2. Wire 3 LEDs to Arduino UNO (pins 13, 12, 8)
+2. Wire 3 LEDs to Arduino UNO (pins 13, 12, 11)
 3. Connect UNO to Raspberry Pi via USB cable
 4. Flash firmware: `./build.sh --port /dev/ttyUSB0`
 5. Run test: `python3 controller/simple_test.py`
