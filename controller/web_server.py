@@ -275,6 +275,49 @@ def get_animations():
     return jsonify({'animations': animations})
 
 
+@app.route('/api/led-assignments')
+def get_led_assignments():
+    """Get LED assignments from config."""
+    assignments = config.led_assignments if hasattr(config, 'led_assignments') else {}
+    return jsonify({'assignments': assignments})
+
+
+@app.route('/api/led-assignments', methods=['POST'])
+def save_led_assignments():
+    """Save LED assignments to config."""
+    data = request.get_json()
+    assignments = data.get('assignments', {})
+    
+    # Save to config
+    config.led_assignments = assignments
+    
+    # Persist to file
+    try:
+        import yaml
+        # Get config.yaml path from parent directory
+        import os
+        config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config.yaml')
+        
+        with open(config_path, 'r') as f:
+            config_data = yaml.safe_load(f)
+        
+        config_data['led_assignments'] = assignments
+        
+        with open(config_path, 'w') as f:
+            yaml.dump(config_data, f, default_flow_style=False)
+        
+        return jsonify({'success': True, 'assignments': assignments})
+    except Exception as e:
+        logger.error(f"Failed to save LED assignments: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/led-assignment')
+def led_assignment():
+    """Serve the LED assignment page."""
+    return render_template('led_assignment.html')
+
+
 def run_server(host='0.0.0.0', port=5000, config_obj=None):
     """Run the Flask web server."""
     init_controller(config_obj)

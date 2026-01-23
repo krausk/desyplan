@@ -27,3 +27,4 @@ cline_mcp_settings.json
 
 # MCP servers
 mcp_servers/
+.mcp/

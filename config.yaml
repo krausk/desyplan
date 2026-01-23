@@ -1,66 +1,319 @@
-# Environment configuration for desyplan relay controller
-
-# Available environments: production, test
 active_environment: test
-
 environments:
   production:
-    description: "Full system with 6 Arduino Mega 2560s controlling 576 relays"
+    description: Full system with 6 Arduino Mega 2560s controlling 576 relays
+    firmware:
+      board: arduino:avr:mega
+      pins: auto
+      source: firmware/SlaveController/SlaveController.ino
     hardware:
-      controller_type: "Arduino Mega 2560"
-      num_slaves: 6
+      controller_type: Arduino Mega 2560
       leds_per_slave: 96
+      num_slaves: 6
+      serial_baudrate: 115200
+      serial_ports:
+      - /dev/ttyUSB0
+      - /dev/ttyUSB1
+      - /dev/ttyUSB2
+      - /dev/ttyUSB3
+      - /dev/ttyUSB4
+      - /dev/ttyUSB5
       total_leds: 576
-      serial_ports: ["/dev/ttyUSB0", "/dev/ttyUSB1", "/dev/ttyUSB2", "/dev/ttyUSB3", "/dev/ttyUSB4", "/dev/ttyUSB5"]
-      serial_baudrate: 115200
     timing:
-      min_relay_delay: 0.05  # 50ms minimum delay between state changes (software)
-      min_toggle_interval_ms: 20  # 20ms minimum per relay (firmware)
-    firmware:
-      source: "firmware/SlaveController/SlaveController.ino"
-      board: "arduino:avr:mega"
-      pins: "auto"  # Uses firmware's default pin mapping
-
+      min_relay_delay: 0.05
+      min_toggle_interval_ms: 20
   test:
-    description: "Test setup with 1 Arduino UNO controlling 3 LEDs"
+    description: Test setup with 1 Arduino UNO controlling 3 LEDs
+    firmware:
+      board: arduino:avr:uno
+      pins:
+      - 13
+      - 12
+      - 11
+      source: firmware/TestController/TestController.ino
     hardware:
-      controller_type: "Arduino UNO"
-      num_slaves: 1
+      controller_type: Arduino UNO
       leds_per_slave: 3
+      num_slaves: 1
+      pin_mapping:
+        0: 13
+        1: 12
+        2: 11
+      serial_baudrate: 115200
+      serial_ports:
+      - /dev/ttyACM0
       total_leds: 3
-      serial_ports: ["/dev/ttyACM0"]
-      serial_baudrate: 115200
-      # Explicit pin mapping for test LEDs
-      pin_mapping:
-        0: 13  # Built-in LED
-        1: 12
-        2: 11
     timing:
-      min_relay_delay: 0.1  # 100ms for visible LED changes
-      min_toggle_interval_ms: 10  # LEDs can switch faster than relays
-    firmware:
-      source: "firmware/TestController/TestController.ino"
-      board: "arduino:avr:uno"
-      pins: [13, 12, 11]
-
+      min_relay_delay: 0.1
+      min_toggle_interval_ms: 10
   testtwo:
-    description: "Test setup with 1 Arduino UNO and 1 Arduino MEGA controlling each 3 LEDs"
+    description: Test setup with 1 Arduino UNO and 1 Arduino MEGA controlling each
+      3 LEDs
+    firmware:
+      board: arduino:avr:uno
+      pins:
+      - 13
+      - 12
+      - 11
+      source: firmware/TestController/TestController.ino
     hardware:
-      controller_type: "Arduino"
-      num_slaves: 1
+      controller_type: Arduino
       leds_per_slave: 3
-      total_leds: 6
-      serial_ports: ["/dev/ttyACM0", "/dev/ttyACM1"]
-      serial_baudrate: 115200
-      # Explicit pin mapping for test LEDs
+      num_slaves: 1
       pin_mapping:
-        0: 13  # Built-in LED
+        0: 13
         1: 12
         2: 11
+      serial_baudrate: 115200
+      serial_ports:
+      - /dev/ttyACM0
+      - /dev/ttyACM1
+      total_leds: 6
     timing:
-      min_relay_delay: 0.1  # 100ms for visible LED changes
-      min_toggle_interval_ms: 10  # LEDs can switch faster than relays
-    firmware:
-      source: "firmware/TestController/TestController.ino"
-      board: "arduino:avr:uno"
-      pins: [13, 12, 11]
+      min_relay_delay: 0.1
+      min_toggle_interval_ms: 10
+led_assignments:
+  '1769127747461':
+    name: LED_1769127747461
+    x: 88
+    y: 87
+  '1769127749823':
+    name: LED_1769127749823
+    x: 26
+    y: 179
+  '1769127751301':
+    name: LED_1769127751301
+    x: 27
+    y: 240
+  '1769127752628':
+    name: LED_1769127752628
+    x: 41
+    y: 327
+  '1769127753814':
+    name: LED_1769127753814
+    x: 96
+    y: 388
+  '1769127755081':
+    name: LED_1769127755081
+    x: 100
+    y: 429
+  '1769127756176':
+    name: LED_1769127756176
+    x: 158
+    y: 376
+  '1769127758088':
+    name: LED_1769127758088
+    x: 184
+    y: 438
+  '1769127758996':
+    name: LED_1769127758996
+    x: 177
+    y: 394
+  '1769127760038':
+    name: LED_1769127760038
+    x: 200
+    y: 367
+  '1769127761606':
+    name: LED_1769127761606
+    x: 185
+    y: 321
+  '1769127762739':
+    name: LED_1769127762739
+    x: 187
+    y: 281
+  '1769127764044':
+    name: LED_1769127764044
+    x: 201
+    y: 247
+  '1769127765078':
+    name: LED_1769127765078
+    x: 235
+    y: 267
+  '1769127767846':
+    name: LED_1769127767846
+    x: 249
+    y: 284
+  '1769127768873':
+    name: LED_1769127768873
+    x: 229
+    y: 289
+  '1769127770268':
+    name: LED_1769127770268
+    x: 219
+    y: 311
+  '1769127771664':
+    name: LED_1769127771664
+    x: 248
+    y: 257
+  '1769127773891':
+    name: LED_1769127773891
+    x: 239
+    y: 223
+  '1769127775076':
+    name: LED_1769127775076
+    x: 217
+    y: 218
+  '1769127777146':
+    name: LED_1769127777146
+    x: 249
+    y: 192
+  '1769127778008':
+    name: LED_1769127778008
+    x: 258
+    y: 166
+  '1769127779112':
+    name: LED_1769127779112
+    x: 214
+    y: 145
+  '1769127780206':
+    name: LED_1769127780206
+    x: 213
+    y: 183
+  '1769127781429':
+    name: LED_1769127781429
+    x: 169
+    y: 163
+  '1769127783882':
+    name: LED_1769127783882
+    x: 222
+    y: 38
+  '1769127833976':
+    name: LED_1769127833976
+    x: 247
+    y: 119
+  '1769127835512':
+    name: LED_1769127835512
+    x: 290
+    y: 150
+  '1769127836428':
+    name: LED_1769127836428
+    x: 285
+    y: 162
+  '1769127844310':
+    name: LED_1769127844310
+    x: 177
+    y: 124
+  '1769127845908':
+    name: LED_1769127845908
+    x: 348
+    y: 125
+  '1769127847168':
+    name: LED_1769127847168
+    x: 366
+    y: 89
+  '1769127848038':
+    name: LED_1769127848038
+    x: 367
+    y: 60
+  '1769127849120':
+    name: LED_1769127849120
+    x: 320
+    y: 39
+  '1769127850417':
+    name: LED_1769127850417
+    x: 290
+    y: 36
+  '1769127851310':
+    name: LED_1769127851310
+    x: 308
+    y: 21
+  '1769127853123':
+    name: LED_1769127853123
+    x: 361
+    y: 142
+  '1769127854309':
+    name: LED_1769127854309
+    x: 357
+    y: 158
+  '1769127855359':
+    name: LED_1769127855359
+    x: 328
+    y: 187
+  '1769127856266':
+    name: LED_1769127856266
+    x: 298
+    y: 180
+  '1769127857196':
+    name: LED_1769127857196
+    x: 280
+    y: 202
+  '1769127858299':
+    name: LED_1769127858299
+    x: 314
+    y: 241
+  '1769127859266':
+    name: LED_1769127859266
+    x: 325
+    y: 281
+  '1769127859964':
+    name: LED_1769127859964
+    x: 311
+    y: 305
+  '1769127861307':
+    name: LED_1769127861307
+    x: 299
+    y: 306
+  '1769127862236':
+    name: LED_1769127862236
+    x: 309
+    y: 331
+  '1769127863781':
+    name: LED_1769127863781
+    x: 355
+    y: 304
+  '1769127864689':
+    name: LED_1769127864689
+    x: 326
+    y: 303
+  '1769127866279':
+    name: LED_1769127866279
+    x: 230
+    y: 384
+  '1769127867217':
+    name: LED_1769127867217
+    x: 259
+    y: 379
+  '1769127868364':
+    name: LED_1769127868364
+    x: 266
+    y: 353
+  '1769127869632':
+    name: LED_1769127869632
+    x: 315
+    y: 388
+  '1769127870893':
+    name: LED_1769127870893
+    x: 337
+    y: 402
+  '1769127872377':
+    name: LED_1769127872377
+    x: 209
+    y: 422
+  '1769127873623':
+    name: LED_1769127873623
+    x: 235
+    y: 420
+  '1769127874560':
+    name: LED_1769127874560
+    x: 227
+    y: 445
+  '1769127875460':
+    name: LED_1769127875460
+    x: 265
+    y: 450
+  '1769127876540':
+    name: LED_1769127876540
+    x: 294
+    y: 445
+  '1769127877500':
+    name: LED_1769127877500
+    x: 341
+    y: 451
+  '1769127879174':
+    name: LED_1769127879174
+    x: 348
+    y: 475
+  '1769127880276':
+    name: LED_1769127880276
+    x: 379
+    y: 464
