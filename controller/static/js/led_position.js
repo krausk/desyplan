@@ -1,4 +1,4 @@
-// LED Assignment Application
+// LED Position Application
 let assignments = {};
 let selectedLED = null;
 let zoomLevel = 1;
@@ -7,8 +7,8 @@ let isDragging = false;
 let dragStart = { x: 0, y: 0 };
 let nextLEDId = 1;
 let currentSet = 'default';
-let mode = 'assign'; // 'assign' or 'trigger'
 let pendingPin = null; // Pin number for new LED
+let panzoom = null; // Panzoom instance
 
 // Initialize the application
 document.addEventListener('DOMContentLoaded', () => {
@@ -16,7 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 async function initializeApp() {
-    console.log('Initializing LED assignment application...');
+    console.log('Initializing LED position application...');
 
     // Load assignments from config
     await loadAssignments();
@@ -24,14 +24,14 @@ async function initializeApp() {
     // Setup event listeners
     setupEventListeners();
 
+    // Setup touch handlers for mobile
+    setupTouchHandlers();
+
     // Render LED markers
     renderLEDMarkers();
 
     // Update LED list
     updateLEDList();
-
-    // Draw neighbor graph
-    drawNeighborGraph();
 
     // Load assignment sets
     await loadAssignmentSets();
@@ -41,10 +41,23 @@ function setupEventListeners() {
     const svg = document.getElementById('desyplan-svg');
     const container = document.getElementById('svg-container');
 
+    // Initialize Panzoom for zoom and pan
+    panzoom = Panzoom(svg, {
+        minScale: 0.1,
+        maxScale: 10,
+        step: 0.2,
+        contain: 'center',
+        disablePan: false,
+        disableZoom: false,
+        startScale: 1,
+        startX: 0,
+        startY: 0
+    });
+
     // SVG click to add LED
     svg.addEventListener('click', handleSVGClick);
 
-    // SVG drag for panning
+    // SVG drag for panning (handled by Panzoom)
     svg.addEventListener('mousedown', handleMouseDown);
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
@@ -70,13 +83,6 @@ function setupEventListeners() {
     document.getElementById('assignment-set-select').addEventListener('change', handleSetChange);
     document.getElementById('create-set-btn').addEventListener('click', createNewSet);
     document.getElementById('delete-set-btn').addEventListener('click', deleteCurrentSet);
-
-    // Mode switch
-    document.querySelectorAll('input[name="mode"]').forEach(radio => {
-        radio.addEventListener('change', (e) => {
-            handleModeSwitch(e.target.value);
-        });
-    });
 
     // Keyboard shortcuts
     document.addEventListener('keydown', handleKeyDown);
@@ -145,7 +151,6 @@ async function clearAssignments() {
         assignments = {};
         renderLEDMarkers();
         updateLEDList();
-        drawNeighborGraph();
         showToast('All assignments cleared', 'success');
     }
 }
@@ -179,7 +184,6 @@ async function handleSetChange(e) {
     await loadAssignmentsForSet(currentSet);
     renderLEDMarkers();
     updateLEDList();
-    drawNeighborGraph();
 }
 
 // Load assignments for a specific set
@@ -187,6 +191,14 @@ async function loadAssignmentsForSet(setName) {
     try {
         const data = await apiRequest(`led-assignments?set=${setName}`);
         assignments = data.assignments || {};
+        
+        // Find the maximum LED ID and set nextLEDId to max + 1
+        const ledIds = Object.keys(assignments).map(Number);
+        if (ledIds.length > 0) {
+            const maxId = Math.max(...ledIds);
+            nextLEDId = maxId + 1;
+        }
+        
         showToast(`Loaded set: ${setName}`, 'success');
     } catch (error) {
         console.error(`Failed to load set ${setName}:`, error);
@@ -250,22 +262,19 @@ function handleSVGClick(event) {
         return;
     }
 
-    // In assign mode, add new LED
-    if (mode === 'assign') {
-        assignments[nextLEDId] = {
-            x: Math.round(x),
-            y: Math.round(y),
-            name: `LED_${nextLEDId}`
-        };
-        
-        nextLEDId++;
+    // Add new LED
+    assignments[nextLEDId] = {
+        x: Math.round(x),
+        y: Math.round(y),
+        name: `LED_${nextLEDId}`
+    };
+    
+    nextLEDId++;
 
-        renderLEDMarkers();
-        updateLEDList();
-        drawNeighborGraph();
-        selectLED(ledId);
-        showToast(`Added LED ${ledId}. Please assign a pin.`, 'success');
-    }
+    renderLEDMarkers();
+    updateLEDList();
+    selectLED(ledId);
+    showToast(`Added LED ${nextLEDId - 1}. Please assign a pin.`, 'success');
 }
 
 // Confirm pin assignment
@@ -293,27 +302,11 @@ async function confirmPinAssignment() {
     }
 }
 
-// Handle mode switch
-function handleModeSwitch(mode) {
-    mode = mode;
-    
-    // Hide pin assignment panel when switching to assign mode
-    document.getElementById('pin-assignment-panel').style.display = 'none';
-    
-    // Update UI based on mode
-    renderLEDMarkers();
-    updateLEDList();
-    drawNeighborGraph();
-    
-    showToast(`Switched to ${mode} mode`, 'success');
-}
-
 // Select LED
 function selectLED(ledId) {
     selectedLED = ledId;
     renderLEDMarkers();
     updateLEDList();
-    drawNeighborGraph();
 }
 
 // Remove LED
@@ -325,7 +318,6 @@ async function removeLED(ledId) {
         }
         renderLEDMarkers();
         updateLEDList();
-        drawNeighborGraph();
         showToast(`LED ${ledId} removed`, 'success');
     }
 }
@@ -347,15 +339,8 @@ function renderLEDMarkers() {
         const marker = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
         marker.setAttribute('cx', data.x);
         marker.setAttribute('cy', data.y);
-        marker.setAttribute('r', 8);
-        
-        // Style based on mode and selection
-        if (mode === 'trigger') {
-            marker.setAttribute('class', 'led-marker trigger-mode');
-        } else {
-            marker.setAttribute('class', 'led-marker');
-        }
-        
+        marker.setAttribute('r', 4);
+        marker.setAttribute('class', 'led-marker');
         marker.dataset.ledId = id;
 
         // Add label with truncated ID
@@ -376,24 +361,19 @@ function renderLEDMarkers() {
             const pin = data.pin !== undefined ? `Pin: ${data.pin}` : 'Pin: Not assigned';
             tooltip.innerHTML = `ID: ${id}<br>Name: ${data.name}<br>Position: (${data.x}, ${data.y})<br>${pin}`;
             tooltip.style.display = 'block';
-            tooltip.style.left = (e.clientX + 10) + 'px';
-            tooltip.style.top = (e.clientY + 10) + 'px';
+            // Position tooltip below the LED marker
+            tooltip.style.left = (data.x - 50) + 'px';
+            tooltip.style.top = (data.y + 15) + 'px';
         });
 
         marker.addEventListener('mouseleave', () => {
             document.getElementById('tooltip').style.display = 'none';
         });
 
-        // Click handler for trigger mode
+        // Click handler
         marker.addEventListener('click', (e) => {
             e.stopPropagation();
-            
-            if (mode === 'trigger') {
-                // Trigger the LED
-                triggerLED(parseInt(id));
-            } else {
-                selectLED(parseInt(id));
-            }
+            selectLED(parseInt(id));
         });
 
         markersGroup.appendChild(marker);
@@ -402,46 +382,6 @@ function renderLEDMarkers() {
 
     // Update badge
     document.getElementById('led-count-badge').textContent = `${Object.keys(assignments).length} LEDs Assigned`;
-}
-
-// Trigger LED (for trigger mode)
-async function triggerLED(ledId) {
-    const data = assignments[ledId];
-    if (!data) return;
-
-    // Get pin number if assigned
-    const pin = data.pin !== undefined ? data.pin : null;
-
-    if (pin === null) {
-        showToast(`LED ${ledId} has no pin assigned`, 'error');
-        return;
-    }
-
-    try {
-        // Send trigger request to web server
-        const response = await fetch('/api/trigger', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                pin: pin,
-                ledId: ledId,
-                name: data.name
-            })
-        });
-
-        const result = await response.json();
-        
-        if (response.ok) {
-            showToast(`Triggered LED ${ledId} (Pin ${pin})`, 'success');
-        } else {
-            showToast(`Failed to trigger LED: ${result.error}`, 'error');
-        }
-    } catch (error) {
-        console.error('Failed to trigger LED:', error);
-        showToast(`Error triggering LED: ${error.message}`, 'error');
-    }
 }
 
 // Update LED list in controls panel
@@ -485,172 +425,47 @@ function updateLEDList() {
     });
 }
 
-// Draw 2D neighbor graph
-function drawNeighborGraph() {
-    const canvas = document.getElementById('neighbor-graph');
-    const ctx = canvas.getContext('2d');
-    
-    // Set canvas size
-    canvas.width = canvas.offsetWidth;
-    canvas.height = canvas.offsetHeight;
-
-    const ledIds = Object.keys(assignments).map(Number).sort((a, b) => a - b);
-
-    if (ledIds.length === 0) {
-        ctx.fillStyle = '#9ca3af';
-        ctx.font = '12px Inter, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('No LEDs assigned', canvas.width / 2, canvas.height / 2);
-        return;
-    }
-
-    // Clear canvas
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Calculate positions
-    const positions = {};
-    const padding = 40;
-    const availableWidth = canvas.width - padding * 2;
-    const availableHeight = canvas.height - padding * 2;
-    const nodeRadius = 15;
-
-    // Simple layout: distribute nodes in a grid
-    const cols = Math.ceil(Math.sqrt(ledIds.length));
-    const rows = Math.ceil(ledIds.length / cols);
-
-    ledIds.forEach((id, index) => {
-        const col = index % cols;
-        const row = Math.floor(index / cols);
-        
-        positions[id] = {
-            x: padding + col * (availableWidth / (cols - 1 || 1)),
-            y: padding + row * (availableHeight / (rows - 1 || 1))
-        };
-    });
-
-    // Draw edges (neighbors within threshold)
-    const threshold = 100;
-    ctx.strokeStyle = '#d1d5db';
-    ctx.lineWidth = 2;
-
-    ledIds.forEach(id1 => {
-        ledIds.forEach(id2 => {
-            if (id1 < id2) {
-                const pos1 = positions[id1];
-                const pos2 = positions[id2];
-                const dist = Math.sqrt(
-                    Math.pow(pos1.x - pos2.x, 2) + 
-                    Math.pow(pos1.y - pos2.y, 2)
-                );
-
-                if (dist < threshold) {
-                    ctx.beginPath();
-                    ctx.moveTo(pos1.x, pos1.y);
-                    ctx.lineTo(pos2.x, pos2.y);
-                    ctx.stroke();
-                }
-            }
-        });
-    });
-
-    // Draw nodes
-    ledIds.forEach(id => {
-        const pos = positions[id];
-        const isSelected = selectedLED === id;
-        const hasPin = assignments[id].pin !== undefined;
-
-        // Node circle
-        ctx.beginPath();
-        ctx.arc(pos.x, pos.y, nodeRadius, 0, Math.PI * 2);
-        
-        if (isSelected) {
-            ctx.fillStyle = '#f59e0b';
-            ctx.strokeStyle = '#d97706';
-            ctx.lineWidth = 3;
-        } else if (hasPin) {
-            ctx.fillStyle = '#10b981';
-            ctx.strokeStyle = '#059669';
-            ctx.lineWidth = 2;
-        } else {
-            ctx.fillStyle = '#3b82f6';
-            ctx.strokeStyle = '#2563eb';
-            ctx.lineWidth = 2;
-        }
-        
-        ctx.fill();
-        ctx.stroke();
-
-        // Node label
-        ctx.fillStyle = '#1f2937';
-        ctx.font = '10px JetBrains Mono, monospace';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(id, pos.x, pos.y);
-    });
-}
-
-// Zoom functions
+// Zoom functions using Panzoom
 function zoomIn() {
-    zoomLevel = Math.min(zoomLevel * 1.2, 10);
-    updateZoom();
+    if (panzoom) {
+        panzoom.zoomIn();
+        updateZoomDisplay();
+    }
 }
 
 function zoomOut() {
-    zoomLevel = Math.max(zoomLevel / 1.2, 0.1);
-    updateZoom();
+    if (panzoom) {
+        panzoom.zoomOut();
+        updateZoomDisplay();
+    }
 }
 
 function resetZoom() {
-    zoomLevel = 1;
-    panOffset = { x: 0, y: 0 };
-    updateZoom();
+    if (panzoom) {
+        panzoom.reset();
+        updateZoomDisplay();
+    }
 }
 
-function updateZoom() {
-    const svg = document.getElementById('desyplan-svg');
-    const container = document.getElementById('svg-container');
-    
-    // Update zoom level display
-    document.getElementById('zoom-level').textContent = `${Math.round(zoomLevel * 100)}%`;
-    
-    // Apply zoom to the SVG using transform
-    // This keeps the viewBox fixed, so the content scales but the coordinate system remains consistent
-    svg.style.transform = `scale(${zoomLevel})`;
-    svg.style.transformOrigin = 'center center';
-    
-    // Adjust pan offset to keep center in view
-    panOffset.x = (container.offsetWidth - 800) / 2;
-    panOffset.y = (container.offsetHeight - 600) / 2;
+function updateZoomDisplay() {
+    if (panzoom) {
+        const scale = panzoom.getScale();
+        document.getElementById('zoom-level').textContent = `${Math.round(scale * 100)}%`;
+    }
 }
 
-// Mouse drag for panning
+// Mouse drag for panning (handled by Panzoom)
 function handleMouseDown(event) {
     if (event.target.closest('.led-marker')) return;
-    isDragging = true;
-    dragStart = { x: event.clientX, y: event.clientY };
-    document.getElementById('desyplan-svg').style.cursor = 'grabbing';
+    // Panzoom handles panning automatically
 }
 
 function handleMouseMove(event) {
-    if (!isDragging) return;
-    
-    const dx = event.clientX - dragStart.x;
-    const dy = event.clientY - dragStart.y;
-    
-    dragStart = { x: event.clientX, y: event.clientY };
-    
-    // Adjust pan offset
-    panOffset.x += dx;
-    panOffset.y += dy;
-    
-    const svg = document.getElementById('desyplan-svg');
-    svg.style.transformOrigin = 'center center';
-    svg.style.transform = `scale(${zoomLevel}) translate(${panOffset.x}px, ${panOffset.y}px)`;
+    // Panzoom handles panning automatically
 }
 
 function handleMouseUp() {
-    isDragging = false;
-    document.getElementById('desyplan-svg').style.cursor = 'grab';
+    // Panzoom handles panning automatically
 }
 
 // Keyboard shortcuts
@@ -673,6 +488,56 @@ function showToast(message, type = 'success') {
         toast.style.animation = 'slideIn 0.3s ease-out reverse';
         setTimeout(() => toast.remove(), 300);
     }, 3000);
+}
+
+// Haptic feedback for mobile devices
+function triggerHapticFeedback(type = 'light') {
+    if (navigator.vibrate) {
+        switch (type) {
+            case 'light':
+                navigator.vibrate(10);
+                break;
+            case 'medium':
+                navigator.vibrate(30);
+                break;
+            case 'heavy':
+                navigator.vibrate([50, 50, 50]);
+                break;
+            case 'success':
+                navigator.vibrate([50, 30, 50]);
+                break;
+            case 'error':
+                navigator.vibrate([100, 50, 100]);
+                break;
+        }
+    }
+}
+
+// Touch event handlers for mobile
+function setupTouchHandlers() {
+    const svg = document.getElementById('desyplan-svg');
+    
+    // Add touch feedback for LED markers
+    svg.querySelectorAll('.led-marker').forEach(marker => {
+        marker.addEventListener('touchstart', () => {
+            triggerHapticFeedback('light');
+        });
+        
+        marker.addEventListener('touchend', () => {
+            triggerHapticFeedback('medium');
+        });
+    });
+    
+    // Add touch feedback for buttons
+    document.querySelectorAll('button').forEach(button => {
+        button.addEventListener('touchstart', () => {
+            triggerHapticFeedback('light');
+        });
+        
+        button.addEventListener('touchend', () => {
+            triggerHapticFeedback('medium');
+        });
+    });
 }
 
 // Cleanup on page unload

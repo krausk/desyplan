@@ -4,10 +4,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DESY Plan | LED Assignment</title>
+    <title>DESY Plan | LED Position</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono&display=swap"
         rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@panzoom/panzoom@4.5.1/dist/panzoom.min.js"></script>
     <style>
         .led-assignment-container {
             display: grid;
@@ -40,7 +41,7 @@
         .led-marker {
             fill: var(--mathematica-orange);
             stroke: #fff;
-            stroke-width: 2;
+            stroke-width: 1;
             cursor: pointer;
         }
 
@@ -349,7 +350,7 @@
 <body>
     <div class="container">
         <header>
-            <h1>DESY Plan | LED Assignment</h1>
+            <h1>DESY Plan | LED Position</h1>
             <div id="status-bar">
                 <span id="led-count-badge" class="badge">0 LEDs Assigned</span>
             </div>
@@ -363,16 +364,6 @@
                 <button class="btn-secondary delete-set-btn" id="delete-set-btn" style="margin-left: 0.5rem;">Delete</button>
             </div>
             
-            <div class="mode-switch">
-                <label>
-                    <input type="radio" name="mode" value="assign" checked>
-                    Assign Mode
-                </label>
-                <label>
-                    <input type="radio" name="mode" value="trigger">
-                    Trigger Mode
-                </label>
-            </div>
         </header>
 
         <main>
@@ -424,23 +415,18 @@
                 No LEDs assigned yet.<br>Click on the plan to add LEDs.
             </div>
         </div>
-
-        <div class="graph-container">
-            <h3>2D Neighbor Graph</h3>
-            <canvas id="neighbor-graph"></canvas>
-        </div>
     </div>
             </div>
         </main>
 
         <footer>
-            <p><strong>DESY Plan</strong> LED Assignment Interface | Academic Retrofit System</p>
+            <p><strong>DESY Plan</strong> LED Position Interface | Academic Retrofit System</p>
         </footer>
     </div>
 
     <div id="toast-container"></div>
 
-    <script src="{{ url_for('static', filename='js/led_assignment.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/led_position.js') }}"></script>
 </body>
 
 </html>

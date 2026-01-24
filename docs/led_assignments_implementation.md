@@ -1,7 +1,7 @@
-# LED Assignments Implementation
+# LED Position Implementation
 
 ## Overview
-This document describes the LED assignment system that allows mapping LEDs to pins and managing multiple sets of assignments.
+This document describes the LED position system that allows mapping LEDs to pins and managing multiple sets of position mappings.
 
 ## Key Features
 
@@ -10,19 +10,19 @@ This document describes the LED assignment system that allows mapping LEDs to pi
 - Pin mapping is stored directly in the LED assignment data
 - The mapping is independent of the environment configuration
 
-### 2. Multiple Assignment Sets
-- Support for multiple sets of LED assignments
+### 2. Multiple Position Sets
+- Support for multiple sets of LED position mappings
 - Each set can be loaded independently via the web interface
 - Sets are stored in `config.yaml` under the `led_assignments` section
 
 ### 3. Web Interface
-- **LED Assignment Page**: `/led-assignment`
+- **LED Position Page**: `/led-position`
 - **Features**:
   - Visual map of the DESY plan with LED positions
   - Add new LEDs by clicking on the map
   - Assign pins to LEDs
   - Select and manage existing assignments
-  - Switch between different assignment sets
+  - Switch between different position sets
   - Trigger LEDs in trigger mode
   - Visual indicators for pin assignments
 
@@ -75,18 +75,18 @@ led_assignments:
 ## Usage
 
 ### Adding a New LED
-1. Navigate to `/led-assignment`
+1. Navigate to `/led-position`
 2. Switch to "Assign" mode
 3. Click on the map to add a new LED
 4. Enter the pin number in the popup panel
 5. Click "Save" to persist the assignment
 
-### Switching Assignment Sets
+### Switching Position Sets
 1. Use the dropdown menu to select a different set
 2. The map and assignments will update automatically
 
 ### Triggering an LED
-1. Navigate to `/led-assignment`
+1. Navigate to `/led-position`
 2. Switch to "Trigger" mode
 3. Click on an LED on the map
 4. The LED will be triggered via its assigned pin
@@ -94,14 +94,14 @@ led_assignments:
 ## Implementation Details
 
 ### Frontend (JavaScript)
-- **led_assignment.js**: Main application logic
+- **led_position.js**: Main application logic
   - Handles map interactions
   - Manages assignment state
   - Communicates with API endpoints
   - Implements trigger mode
   - Manages multiple sets
 
-- **led_assignment.html**: UI template
+- **led_position.html**: UI template
   - Map visualization
   - Control panels
   - Set management UI

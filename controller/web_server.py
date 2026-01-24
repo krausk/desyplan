@@ -513,10 +513,10 @@ def trigger_led():
     })
 
 
-@app.route('/led-assignment')
-def led_assignment():
-    """Serve the LED assignment page."""
-    return render_template('led_assignment.html')
+@app.route('/led-position')
+def led_position():
+    """Serve the LED position page."""
+    return render_template('led_position.html')
 
 
 def run_server(host='0.0.0.0', port=5000, config_obj=None):
