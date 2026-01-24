@@ -42,12 +42,10 @@
             stroke: #fff;
             stroke-width: 2;
             cursor: pointer;
-            transition: all 0.2s;
         }
 
         .led-marker:hover {
             fill: #fbbf24;
-            transform: scale(1.2);
         }
 
         .led-marker.selected {
@@ -122,7 +120,6 @@
             border: 1px solid var(--notebook-border);
             border-radius: 4px;
             cursor: pointer;
-            transition: all 0.15s;
         }
 
         .led-item:hover {
@@ -283,6 +280,53 @@
             white-space: nowrap;
         }
 
+        .assignment-set-selector {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 1rem;
+            padding: 0.75rem;
+            background: #f9fafb;
+            border: 1px solid var(--notebook-border);
+            border-radius: 4px;
+        }
+
+        .assignment-set-selector label {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .assignment-set-selector select {
+            padding: 0.5rem 1rem;
+            border: 1px solid var(--notebook-border);
+            border-radius: 4px;
+            background: white;
+            font-size: 0.875rem;
+            cursor: pointer;
+        }
+
+        .mode-switch {
+            display: flex;
+            gap: 1.5rem;
+            margin-top: 1rem;
+            padding: 0.75rem;
+            background: #f9fafb;
+            border: 1px solid var(--notebook-border);
+            border-radius: 4px;
+        }
+
+        .mode-switch label {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+            cursor: pointer;
+        }
+
+        .mode-switch input[type="radio"] {
+            cursor: pointer;
+        }
+
         @media (max-width: 900px) {
             .led-assignment-container {
                 grid-template-columns: 1fr;
@@ -291,6 +335,12 @@
 
             .svg-container {
                 height: 500px;
+            }
+
+            .assignment-set-selector,
+            .mode-switch {
+                flex-direction: column;
+                align-items: flex-start;
             }
         }
     </style>
@@ -302,6 +352,26 @@
             <h1>DESY Plan | LED Assignment</h1>
             <div id="status-bar">
                 <span id="led-count-badge" class="badge">0 LEDs Assigned</span>
+            </div>
+            
+            <div class="assignment-set-selector">
+                <label for="assignment-set-select">Assignment Set:</label>
+                <select id="assignment-set-select">
+                    <option value="default">Default Assignment</option>
+                </select>
+                <button class="btn-secondary" id="create-set-btn" style="margin-left: 0.5rem;">+ New Set</button>
+                <button class="btn-secondary delete-set-btn" id="delete-set-btn" style="margin-left: 0.5rem;">Delete</button>
+            </div>
+            
+            <div class="mode-switch">
+                <label>
+                    <input type="radio" name="mode" value="assign" checked>
+                    Assign Mode
+                </label>
+                <label>
+                    <input type="radio" name="mode" value="trigger">
+                    Trigger Mode
+                </label>
             </div>
         </header>
 
@@ -325,32 +395,41 @@
                 </div>
 
                 <!-- Controls Panel -->
-                <div class="controls-panel">
-                    <h2>Manipulate[Assignments...]</h2>
-                    
-                    <div class="zoom-controls">
-                        <button class="zoom-btn" id="zoom-in-btn">+</button>
-                        <span class="zoom-level" id="zoom-level">100%</span>
-                        <button class="zoom-btn" id="zoom-out-btn">-</button>
-                        <button class="zoom-btn" id="zoom-reset-btn">Reset</button>
-                    </div>
+    <div class="controls-panel">
+        <h2>Manipulate[Assignments...]</h2>
+        
+        <div class="zoom-controls">
+            <button class="zoom-btn" id="zoom-in-btn">+</button>
+            <span class="zoom-level" id="zoom-level">100%</span>
+            <button class="zoom-btn" id="zoom-out-btn">-</button>
+            <button class="zoom-btn" id="zoom-reset-btn">Reset</button>
+        </div>
 
-                    <div class="action-buttons">
-                        <button class="btn-primary" id="save-btn">Save[]</button>
-                        <button class="btn-secondary" id="clear-btn">Clear[]</button>
-                    </div>
+        <div class="action-buttons">
+            <button class="btn-primary" id="save-btn">Save[]</button>
+            <button class="btn-secondary" id="clear-btn">Clear[]</button>
+        </div>
 
-                    <div class="led-list" id="led-list">
-                        <div class="empty-state">
-                            No LEDs assigned yet.<br>Click on the plan to add LEDs.
-                        </div>
-                    </div>
+        <div id="pin-assignment-panel" style="display: none; margin-top: 1rem; padding: 1rem; background: #f9fafb; border: 1px solid var(--notebook-border); border-radius: 4px;">
+            <h3 style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Assign Pin</h3>
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <label for="pin-input" style="font-size: 0.875rem; color: var(--text-secondary);">Pin Number:</label>
+                <input type="number" id="pin-input" min="0" max="255" placeholder="Enter pin" style="padding: 0.5rem; border: 1px solid var(--notebook-border); border-radius: 4px; background: white; font-size: 0.875rem; flex: 1;">
+                <button class="btn-primary" id="confirm-pin-btn" style="padding: 0.5rem 1rem; font-size: 0.875rem;">Confirm</button>
+            </div>
+        </div>
 
-                    <div class="graph-container">
-                        <h3>2D Neighbor Graph</h3>
-                        <canvas id="neighbor-graph"></canvas>
-                    </div>
-                </div>
+        <div class="led-list" id="led-list">
+            <div class="empty-state">
+                No LEDs assigned yet.<br>Click on the plan to add LEDs.
+            </div>
+        </div>
+
+        <div class="graph-container">
+            <h3>2D Neighbor Graph</h3>
+            <canvas id="neighbor-graph"></canvas>
+        </div>
+    </div>
             </div>
         </main>
 

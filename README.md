@@ -106,6 +106,7 @@ python3 controller/main.py --scan
 - **[TEST_SETUP.md](TEST_SETUP.md)** - Complete guide for 3-LED test setup
 - **[CLAUDE.md](CLAUDE.md)** - Developer reference and architecture details
 - **docs/hardware_logic.md** - Hardware wiring and specifications
+- **docs/led_assignments_implementation.md** - LED assignment system documentation
 
 ## Web Interface
 
@@ -161,6 +162,45 @@ The web server also provides a REST API:
 - `GET /api/animations` - List available animations
 - `POST /api/animation/start` - Start an animation
 - `POST /api/animation/stop` - Stop current animation
+
+### LED Assignment System
+
+The LED assignment system allows you to map LEDs to specific pins and manage multiple sets of assignments.
+
+**Access the LED Assignment Interface:**
+```
+http://raspberry-pi-ip:5000/led-assignment
+```
+
+**Key Features:**
+- **Visual Map**: Click on the DESY plan to add new LEDs
+- **Pin Assignment**: Assign each LED to a specific pin number
+- **Multiple Sets**: Create and switch between different assignment sets
+- **Trigger Mode**: Click on LEDs to trigger them via their assigned pins
+- **Visual Indicators**: Green for LEDs with pins, blue for LEDs without pins
+
+**How to Use:**
+
+1. **Add a New LED:**
+   - Navigate to `/led-assignment`
+   - Click on the map to add a new LED
+   - Enter the pin number in the popup panel
+   - Click "Save" to persist the assignment
+
+2. **Switch Assignment Sets:**
+   - Use the dropdown menu to select a different set
+   - The map and assignments will update automatically
+
+3. **Trigger an LED:**
+   - Navigate to `/led-assignment`
+   - Switch to "Trigger" mode
+   - Click on an LED on the map
+   - The LED will be triggered via its assigned pin
+
+**Configuration:**
+- Assignments are stored in `config.yaml` under the `led_assignments` section
+- Each set contains LED mappings with position (x, y) and pin number
+- Pin mapping is independent of environment configuration
 
 ## Configuration
 

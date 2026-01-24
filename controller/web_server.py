@@ -8,6 +8,7 @@ from flask import Flask, render_template, jsonify, request
 import threading
 import time
 import logging
+import os
 from display_manager import DisplayManager
 from config_loader import Config
 from animation import RandomTwinkle, ScanningChase, LarsonScanner, RelayTest, CircleAnimation
@@ -278,8 +279,143 @@ def get_animations():
 @app.route('/api/led-assignments')
 def get_led_assignments():
     """Get LED assignments from config."""
-    assignments = config.led_assignments if hasattr(config, 'led_assignments') else {}
-    return jsonify({'assignments': assignments})
+    # Check if a specific set is requested via query parameter
+    set_name = request.args.get('set')
+    
+    if set_name:
+        # Load assignments for a specific set
+        try:
+            import yaml
+            config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config.yaml')
+            
+            with open(config_path, 'r') as f:
+                config_data = yaml.safe_load(f)
+            
+            led_assignments = config_data.get('led_assignments', {})
+            
+            # Check if the set exists
+            if set_name in led_assignments:
+                # If it's a set with assignments, return those
+                if isinstance(led_assignments[set_name], dict) and 'assignments' in led_assignments[set_name]:
+                    return jsonify({'assignments': led_assignments[set_name]['assignments']})
+                # If it's a flat assignment dict, return it directly
+                elif isinstance(led_assignments[set_name], dict):
+                    return jsonify({'assignments': led_assignments[set_name]})
+                # If it's the default set, return the assignments
+                elif set_name == 'default':
+                    return jsonify({'assignments': led_assignments})
+            else:
+                return jsonify({'assignments': {}}), 404
+        except Exception as e:
+            logger.error(f"Failed to load assignments for set {set_name}: {e}")
+            return jsonify({'assignments': {}}), 500
+    else:
+        # Return all assignments from the Config object
+        assignments = config.led_assignments if hasattr(config, 'led_assignments') else {}
+        return jsonify({'assignments': assignments})
+
+
+@app.route('/api/led-assignment-sets')
+def get_led_assignment_sets():
+    """Get list of LED assignment sets from config."""
+    try:
+        import yaml
+        config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config.yaml')
+        
+        with open(config_path, 'r') as f:
+            config_data = yaml.safe_load(f)
+        
+        led_assignments = config_data.get('led_assignments', {})
+        
+        # Extract set names and metadata
+        sets = []
+        for key, value in led_assignments.items():
+            if key == 'default':
+                sets.append({
+                    'name': 'default',
+                    'display_name': 'Default Assignment',
+                    'description': 'Default LED assignment set',
+                    'is_default': True
+                })
+            elif isinstance(value, dict) and 'assignments' in value:
+                sets.append({
+                    'name': key,
+                    'display_name': value.get('name', key),
+                    'description': value.get('description', ''),
+                    'is_default': False
+                })
+        
+        return jsonify({'sets': sets})
+    except Exception as e:
+        logger.error(f"Failed to get LED assignment sets: {e}")
+        return jsonify({'sets': []}), 500
+
+
+@app.route('/api/led-assignment-sets', methods=['POST'])
+def create_led_assignment_set():
+    """Create a new LED assignment set."""
+    try:
+        import yaml
+        data = request.get_json()
+        set_name = data.get('name')
+        
+        if not set_name:
+            return jsonify({'error': 'Set name required'}), 400
+        
+        config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config.yaml')
+        
+        with open(config_path, 'r') as f:
+            config_data = yaml.safe_load(f)
+        
+        led_assignments = config_data.get('led_assignments', {})
+        
+        # Create new set
+        led_assignments[set_name] = {
+            'name': set_name,
+            'description': f'LED assignment set: {set_name}',
+            'assignments': {}
+        }
+        
+        config_data['led_assignments'] = led_assignments
+        
+        with open(config_path, 'w') as f:
+            yaml.dump(config_data, f, default_flow_style=False)
+        
+        return jsonify({'success': True, 'name': set_name})
+    except Exception as e:
+        logger.error(f"Failed to create LED assignment set: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/led-assignment-sets/<set_name>', methods=['DELETE'])
+def delete_led_assignment_set(set_name):
+    """Delete an LED assignment set."""
+    try:
+        import yaml
+        config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config.yaml')
+        
+        with open(config_path, 'r') as f:
+            config_data = yaml.safe_load(f)
+        
+        led_assignments = config_data.get('led_assignments', {})
+        
+        if set_name not in led_assignments:
+            return jsonify({'error': 'Set not found'}), 404
+        
+        # Don't delete default set
+        if set_name == 'default':
+            return jsonify({'error': 'Cannot delete default set'}), 400
+        
+        del led_assignments[set_name]
+        config_data['led_assignments'] = led_assignments
+        
+        with open(config_path, 'w') as f:
+            yaml.dump(config_data, f, default_flow_style=False)
+        
+        return jsonify({'success': True})
+    except Exception as e:
+        logger.error(f"Failed to delete LED assignment set: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/led-assignments', methods=['POST'])
@@ -287,29 +423,94 @@ def save_led_assignments():
     """Save LED assignments to config."""
     data = request.get_json()
     assignments = data.get('assignments', {})
+    set_name = data.get('set', 'default')
     
     # Save to config
-    config.led_assignments = assignments
+    config.set_led_assignments(assignments)
     
     # Persist to file
     try:
         import yaml
-        # Get config.yaml path from parent directory
+        # Get config path
         import os
-        config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config.yaml')
+        config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config.yaml')
         
         with open(config_path, 'r') as f:
             config_data = yaml.safe_load(f)
         
-        config_data['led_assignments'] = assignments
+        # Get existing led_assignments structure
+        led_assignments = config_data.get('led_assignments', {})
+        
+        # If set_name is 'default', save directly to root
+        if set_name == 'default':
+            config_data['led_assignments'] = assignments
+        else:
+            # Save to specific assignment set
+            if not isinstance(led_assignments, dict):
+                led_assignments = {}
+            
+            # Ensure the set has the proper structure
+            if not isinstance(led_assignments[set_name], dict):
+                led_assignments[set_name] = {
+                    'name': set_name,
+                    'description': f'LED assignment set: {set_name}',
+                    'assignments': {}
+                }
+            
+            # Add assignments to the set
+            led_assignments[set_name]['assignments'] = assignments
+            config_data['led_assignments'] = led_assignments
         
         with open(config_path, 'w') as f:
             yaml.dump(config_data, f, default_flow_style=False)
         
-        return jsonify({'success': True, 'assignments': assignments})
+        return jsonify({'success': True, 'assignments': assignments, 'set': set_name})
     except Exception as e:
-        logger.error(f"Failed to save LED assignments: {e}")
+        logger.error(f"Failed to save assignments: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/trigger', methods=['POST'])
+def trigger_led():
+    """Trigger a specific LED via its assigned pin."""
+    global led_states, manual_mode, animation_running
+    
+    data = request.get_json()
+    pin = data.get('pin')
+    led_id = data.get('ledId')
+    name = data.get('name', 'Unknown')
+    
+    if pin is None:
+        return jsonify({'error': 'Pin number required'}), 400
+    
+    if led_id is None:
+        return jsonify({'error': 'LED ID required'}), 400
+    
+    # Stop animation if running
+    if animation_running:
+        stop_animation()
+    
+    manual_mode = True
+    
+    # Update LED state
+    if 0 <= led_id < len(led_states):
+        led_states[led_id] = 1
+    
+    # Update display
+    display_manager.clear()
+    for i, s in enumerate(led_states):
+        if s:
+            display_manager.set_led(i, 1)
+    display_manager.show()
+    
+    logger.info(f"Triggered LED {led_id} (Pin {pin}) - {name}")
+    
+    return jsonify({
+        'success': True,
+        'led_id': led_id,
+        'pin': pin,
+        'name': name
+    })
 
 
 @app.route('/led-assignment')

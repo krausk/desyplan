@@ -5,6 +5,10 @@ let zoomLevel = 1;
 let panOffset = { x: 0, y: 0 };
 let isDragging = false;
 let dragStart = { x: 0, y: 0 };
+let nextLEDId = 1;
+let currentSet = 'default';
+let mode = 'assign'; // 'assign' or 'trigger'
+let pendingPin = null; // Pin number for new LED
 
 // Initialize the application
 document.addEventListener('DOMContentLoaded', () => {
@@ -28,6 +32,9 @@ async function initializeApp() {
 
     // Draw neighbor graph
     drawNeighborGraph();
+
+    // Load assignment sets
+    await loadAssignmentSets();
 }
 
 function setupEventListeners() {
@@ -50,6 +57,26 @@ function setupEventListeners() {
     // Action buttons
     document.getElementById('save-btn').addEventListener('click', saveAssignments);
     document.getElementById('clear-btn').addEventListener('click', clearAssignments);
+
+    // Pin assignment
+    document.getElementById('confirm-pin-btn').addEventListener('click', confirmPinAssignment);
+    document.getElementById('pin-input').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            confirmPinAssignment();
+        }
+    });
+
+    // Assignment set selector
+    document.getElementById('assignment-set-select').addEventListener('change', handleSetChange);
+    document.getElementById('create-set-btn').addEventListener('click', createNewSet);
+    document.getElementById('delete-set-btn').addEventListener('click', deleteCurrentSet);
+
+    // Mode switch
+    document.querySelectorAll('input[name="mode"]').forEach(radio => {
+        radio.addEventListener('change', (e) => {
+            handleModeSwitch(e.target.value);
+        });
+    });
 
     // Keyboard shortcuts
     document.addEventListener('keydown', handleKeyDown);
@@ -87,8 +114,8 @@ async function apiRequest(endpoint, method = 'GET', data = null) {
 // Load assignments from config
 async function loadAssignments() {
     try {
-        const data = await apiRequest('led-assignments');
-        assignments = data.assignments || {};
+        // Load assignments for the current set
+        await loadAssignmentsForSet(currentSet);
         showToast('LED assignments loaded', 'success');
     } catch (error) {
         console.error('Failed to load assignments:', error);
@@ -99,8 +126,9 @@ async function loadAssignments() {
 // Save assignments to config
 async function saveAssignments() {
     try {
-        await apiRequest('led-assignments', 'POST', { assignments });
-        showToast('LED assignments saved successfully', 'success');
+        // Save assignments to the current set
+        await apiRequest('led-assignments', 'POST', { assignments, set: currentSet });
+        showToast(`LED assignments saved successfully to "${currentSet}"`, 'success');
     } catch (error) {
         console.error('Failed to save assignments:', error);
     }
@@ -122,13 +150,90 @@ async function clearAssignments() {
     }
 }
 
+// Load assignment sets
+async function loadAssignmentSets() {
+    try {
+        const data = await apiRequest('led-assignment-sets');
+        const sets = data.sets || [];
+        
+        const select = document.getElementById('assignment-set-select');
+        select.innerHTML = '';
+        
+        sets.forEach(set => {
+            const option = document.createElement('option');
+            option.value = set.name;
+            option.textContent = set.display_name;
+            select.appendChild(option);
+        });
+
+        // Set current set
+        currentSet = select.value;
+    } catch (error) {
+        console.error('Failed to load assignment sets:', error);
+    }
+}
+
+// Handle assignment set change
+async function handleSetChange(e) {
+    currentSet = e.target.value;
+    await loadAssignmentsForSet(currentSet);
+    renderLEDMarkers();
+    updateLEDList();
+    drawNeighborGraph();
+}
+
+// Load assignments for a specific set
+async function loadAssignmentsForSet(setName) {
+    try {
+        const data = await apiRequest(`led-assignments?set=${setName}`);
+        assignments = data.assignments || {};
+        showToast(`Loaded set: ${setName}`, 'success');
+    } catch (error) {
+        console.error(`Failed to load set ${setName}:`, error);
+        assignments = {};
+    }
+}
+
+// Create new assignment set
+async function createNewSet() {
+    const name = prompt('Enter new set name:');
+    if (!name) return;
+
+    try {
+        await apiRequest('led-assignment-sets', 'POST', { name });
+        showToast(`Set "${name}" created`, 'success');
+        await loadAssignmentSets();
+    } catch (error) {
+        console.error('Failed to create set:', error);
+    }
+}
+
+// Delete current assignment set
+async function deleteCurrentSet() {
+    if (currentSet === 'default') {
+        showToast('Cannot delete default set', 'error');
+        return;
+    }
+
+    if (confirm(`Delete set "${currentSet}"?`)) {
+        try {
+            await apiRequest(`led-assignment-sets/${currentSet}`, 'DELETE');
+            showToast(`Set "${currentSet}" deleted`, 'success');
+            await loadAssignmentSets();
+            currentSet = 'default';
+            await loadAssignmentsForSet('default');
+        } catch (error) {
+            console.error('Failed to delete set:', error);
+        }
+    }
+}
+
 // SVG Click Handler
 function handleSVGClick(event) {
     const svg = document.getElementById('desyplan-svg');
     const rect = svg.getBoundingClientRect();
     
     // Calculate click position in SVG coordinates
-    // Account for viewBox and display size
     const viewBoxWidth = 800;
     const viewBoxHeight = 600;
     const scaleX = viewBoxWidth / rect.width;
@@ -145,19 +250,62 @@ function handleSVGClick(event) {
         return;
     }
 
-    // Add new LED
-    const ledId = Date.now();
-    assignments[ledId] = {
-        x: Math.round(x),
-        y: Math.round(y),
-        name: `LED_${ledId}`
-    };
+    // In assign mode, add new LED
+    if (mode === 'assign') {
+        assignments[nextLEDId] = {
+            x: Math.round(x),
+            y: Math.round(y),
+            name: `LED_${nextLEDId}`
+        };
+        
+        nextLEDId++;
 
+        renderLEDMarkers();
+        updateLEDList();
+        drawNeighborGraph();
+        selectLED(ledId);
+        showToast(`Added LED ${ledId}. Please assign a pin.`, 'success');
+    }
+}
+
+// Confirm pin assignment
+async function confirmPinAssignment() {
+    const pinInput = document.getElementById('pin-input');
+    const pin = parseInt(pinInput.value);
+
+    if (isNaN(pin)) {
+        showToast('Please enter a valid pin number', 'error');
+        return;
+    }
+
+    if (pendingPin !== null) {
+        assignments[pendingPin].pin = pin;
+        showToast(`Pin ${pin} assigned to LED ${pendingPin}`, 'success');
+        
+        // Hide pin assignment panel
+        document.getElementById('pin-assignment-panel').style.display = 'none';
+        
+        // Save assignments
+        await saveAssignments();
+        
+        // Clear pending pin
+        pendingPin = null;
+    }
+}
+
+// Handle mode switch
+function handleModeSwitch(mode) {
+    mode = mode;
+    
+    // Hide pin assignment panel when switching to assign mode
+    document.getElementById('pin-assignment-panel').style.display = 'none';
+    
+    // Update UI based on mode
     renderLEDMarkers();
     updateLEDList();
     drawNeighborGraph();
-    selectLED(ledId);
-    showToast(`Added LED ${ledId}`, 'success');
+    
+    showToast(`Switched to ${mode} mode`, 'success');
 }
 
 // Select LED
@@ -200,7 +348,14 @@ function renderLEDMarkers() {
         marker.setAttribute('cx', data.x);
         marker.setAttribute('cy', data.y);
         marker.setAttribute('r', 8);
-        marker.setAttribute('class', 'led-marker');
+        
+        // Style based on mode and selection
+        if (mode === 'trigger') {
+            marker.setAttribute('class', 'led-marker trigger-mode');
+        } else {
+            marker.setAttribute('class', 'led-marker');
+        }
+        
         marker.dataset.ledId = id;
 
         // Add label with truncated ID
@@ -215,10 +370,11 @@ function renderLEDMarkers() {
             : data.name;
         label.textContent = displayName;
 
-        // Add tooltip with full ID
+        // Add tooltip with full ID and pin info
         marker.addEventListener('mouseenter', (e) => {
             const tooltip = document.getElementById('tooltip');
-            tooltip.textContent = `ID: ${id}\nName: ${data.name}\nPosition: (${data.x}, ${data.y})`;
+            const pin = data.pin !== undefined ? `Pin: ${data.pin}` : 'Pin: Not assigned';
+            tooltip.innerHTML = `ID: ${id}<br>Name: ${data.name}<br>Position: (${data.x}, ${data.y})<br>${pin}`;
             tooltip.style.display = 'block';
             tooltip.style.left = (e.clientX + 10) + 'px';
             tooltip.style.top = (e.clientY + 10) + 'px';
@@ -228,9 +384,16 @@ function renderLEDMarkers() {
             document.getElementById('tooltip').style.display = 'none';
         });
 
+        // Click handler for trigger mode
         marker.addEventListener('click', (e) => {
             e.stopPropagation();
-            selectLED(parseInt(id));
+            
+            if (mode === 'trigger') {
+                // Trigger the LED
+                triggerLED(parseInt(id));
+            } else {
+                selectLED(parseInt(id));
+            }
         });
 
         markersGroup.appendChild(marker);
@@ -239,6 +402,46 @@ function renderLEDMarkers() {
 
     // Update badge
     document.getElementById('led-count-badge').textContent = `${Object.keys(assignments).length} LEDs Assigned`;
+}
+
+// Trigger LED (for trigger mode)
+async function triggerLED(ledId) {
+    const data = assignments[ledId];
+    if (!data) return;
+
+    // Get pin number if assigned
+    const pin = data.pin !== undefined ? data.pin : null;
+
+    if (pin === null) {
+        showToast(`LED ${ledId} has no pin assigned`, 'error');
+        return;
+    }
+
+    try {
+        // Send trigger request to web server
+        const response = await fetch('/api/trigger', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                pin: pin,
+                ledId: ledId,
+                name: data.name
+            })
+        });
+
+        const result = await response.json();
+        
+        if (response.ok) {
+            showToast(`Triggered LED ${ledId} (Pin ${pin})`, 'success');
+        } else {
+            showToast(`Failed to trigger LED: ${result.error}`, 'error');
+        }
+    } catch (error) {
+        console.error('Failed to trigger LED:', error);
+        showToast(`Error triggering LED: ${error.message}`, 'error');
+    }
 }
 
 // Update LED list in controls panel
@@ -258,10 +461,12 @@ function updateLEDList() {
     list.innerHTML = ledIds.map(id => {
         const data = assignments[id];
         const isSelected = selectedLED === id;
+        const pinInfo = data.pin !== undefined ? ` (Pin ${data.pin})` : ' (No pin)';
+        
         return `
             <div class="led-item ${isSelected ? 'selected' : ''}" data-led-id="${id}">
                 <span class="led-item-number">${id}</span>
-                <span class="led-item-name">${data.name}</span>
+                <span class="led-item-name">${data.name}${pinInfo}</span>
                 <div class="led-item-actions">
                     <button class="btn-icon delete" onclick="removeLED(${id})">×</button>
                 </div>
@@ -352,6 +557,7 @@ function drawNeighborGraph() {
     ledIds.forEach(id => {
         const pos = positions[id];
         const isSelected = selectedLED === id;
+        const hasPin = assignments[id].pin !== undefined;
 
         // Node circle
         ctx.beginPath();
@@ -361,6 +567,10 @@ function drawNeighborGraph() {
             ctx.fillStyle = '#f59e0b';
             ctx.strokeStyle = '#d97706';
             ctx.lineWidth = 3;
+        } else if (hasPin) {
+            ctx.fillStyle = '#10b981';
+            ctx.strokeStyle = '#059669';
+            ctx.lineWidth = 2;
         } else {
             ctx.fillStyle = '#3b82f6';
             ctx.strokeStyle = '#2563eb';
@@ -381,12 +591,12 @@ function drawNeighborGraph() {
 
 // Zoom functions
 function zoomIn() {
-    zoomLevel = Math.min(zoomLevel * 1.2, 5);
+    zoomLevel = Math.min(zoomLevel * 1.2, 10);
     updateZoom();
 }
 
 function zoomOut() {
-    zoomLevel = Math.max(zoomLevel / 1.2, 0.2);
+    zoomLevel = Math.max(zoomLevel / 1.2, 0.1);
     updateZoom();
 }
 
@@ -398,9 +608,19 @@ function resetZoom() {
 
 function updateZoom() {
     const svg = document.getElementById('desyplan-svg');
+    const container = document.getElementById('svg-container');
+    
+    // Update zoom level display
+    document.getElementById('zoom-level').textContent = `${Math.round(zoomLevel * 100)}%`;
+    
+    // Apply zoom to the SVG using transform
+    // This keeps the viewBox fixed, so the content scales but the coordinate system remains consistent
     svg.style.transform = `scale(${zoomLevel})`;
     svg.style.transformOrigin = 'center center';
-    document.getElementById('zoom-level').textContent = `${Math.round(zoomLevel * 100)}%`;
+    
+    // Adjust pan offset to keep center in view
+    panOffset.x = (container.offsetWidth - 800) / 2;
+    panOffset.y = (container.offsetHeight - 600) / 2;
 }
 
 // Mouse drag for panning
@@ -419,9 +639,9 @@ function handleMouseMove(event) {
     
     dragStart = { x: event.clientX, y: event.clientY };
     
-    // Adjust pan offset by zoom level for smooth panning
-    panOffset.x += dx / zoomLevel;
-    panOffset.y += dy / zoomLevel;
+    // Adjust pan offset
+    panOffset.x += dx;
+    panOffset.y += dy;
     
     const svg = document.getElementById('desyplan-svg');
     svg.style.transformOrigin = 'center center';

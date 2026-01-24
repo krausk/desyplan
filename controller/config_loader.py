@@ -85,6 +85,20 @@ class Config:
         """Get explicit pin mapping if defined (for test environments)."""
         return self.env_config['hardware'].get('pin_mapping', None)
 
+    @property
+    def led_assignments(self):
+        """Get LED assignments from config."""
+        return self.config.get('led_assignments', {})
+    
+    @led_assignments.setter
+    def led_assignments(self, value):
+        """Set LED assignments in config."""
+        self.config['led_assignments'] = value
+    
+    def set_led_assignments(self, assignments):
+        """Set LED assignments in config (deprecated, use property setter instead)."""
+        self.config['led_assignments'] = assignments
+
     def print_config(self):
         """Print current configuration for debugging."""
         print(f"\n{'='*60}")
